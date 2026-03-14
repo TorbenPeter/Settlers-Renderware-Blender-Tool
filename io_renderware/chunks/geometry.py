@@ -2,13 +2,13 @@ from .container import Container
 from .struct import Struct
 from .extension import Extension
 from .skinplg import SkinPLG
+from .materiallist import MaterialList
 from ..containers.rgba import RGBA
 from ..containers.uv import UV
 from ..containers.triangle import Triangle
 from ..containers.sphere import Sphere
 from ..containers.vector3d import Vector3d
 from struct import pack, unpack
-from mathutils import Matrix
 import bpy
 
 class Geometry(Container):
@@ -17,6 +17,7 @@ class Geometry(Container):
 
     def __init__(self, header):
         super().__init__(header)
+        self.object = None
         self.tristrip = False
         self.positions = False
         self.textured = False
@@ -47,7 +48,7 @@ class Geometry(Container):
 
         # TODO: Empty meshes (e.g. in effects) have 0 morph targets
         # TODO: Standarte (and possibly other entities) have multiple morph targets
-        # TODO: How to implement in Blender?
+        # TODO: Store morph targets as shape key. Basic shape key can always be created
         assert (self.number_of_morph_targets <= 1), "Multiple morph targets are not supported in this version"
 
         self.tristrip = bool(format & 0x00000001)
@@ -123,7 +124,7 @@ class Geometry(Container):
                         child.read(file=None, number_of_vertices=self.number_of_vertices)
 
 
-    def build(self, armature, parent_frame):
+    def build(self, armature):
         vertices = [vertex.as_tuple() for vertex in self.vertices]
         triangles = [triangle.as_tuple() for triangle in self.triangles]
 
@@ -133,7 +134,17 @@ class Geometry(Container):
         mesh.from_pydata(vertices, [], triangles)
         mesh.update()
 
-        # TODO: Create Materials and Textures
+        for texture_set in self.texture_sets:
+            uv = mesh.uv_layers.new(name="UVMap{:03}".format(len(mesh.uv_layers)))
+            for triangle in mesh.polygons:
+                for vert_idx, loop_idx in zip(triangle.vertices, triangle.loop_indices):
+                    uv.data[loop_idx].uv = (texture_set[vert_idx].u, texture_set[vert_idx].v)
+
+        # Create Materials and Textures
+        self.children[MaterialList.ID_STAMP][0].build()
+
+        # for i, face in enumerate(mesh.polygons):
+        #     face.material_index = triangles[i].material
 
         # Create Object to attach the mesh to
         object = bpy.data.objects.new("Object{:03}".format(index), mesh)
@@ -141,30 +152,13 @@ class Geometry(Container):
         # Link Object to current collection
         bpy.context.collection.objects.link(object)
 
-        # Set object parent frame
-        constraint = object.constraints.new(type="CHILD_OF")
-        constraint.use_scale_x = False
-        constraint.use_scale_y = False
-        constraint.use_scale_z = False
-        constraint.target = armature
+        self.object = object
 
-        if parent_frame.bone is not None:
-            bone_id = str(parent_frame.bone.id)
-            constraint.subtarget = bone_id
-            if len(armature.pose.bones[bone_id].children) == 0:
-                armature.pose.bones[bone_id].custom_shape = object
-                armature.pose.bones[bone_id].use_custom_shape_bone_size = False
-
-        for key, value in parent_frame.user_data.items():
-            object[key] = value
-
-        constraint.inverse_matrix = Matrix.Identity(4)
-
+        # TODO: MorphPLG
+        # TODO: UserDataPLG
         extensions = self.children[Extension.ID_STAMP]
         for extension in extensions:
             for child_type, children in extension.children.items():
                 for child in children:
-                    if child_type == SkinPLG.ID_STAMP:
+                    if child_type == SkinPLG.ID_STAMP and armature is not None:
                         child.build(object, armature)
-                
-                    

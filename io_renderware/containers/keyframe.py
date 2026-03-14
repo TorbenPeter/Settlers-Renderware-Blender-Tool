@@ -9,6 +9,7 @@ class Keyframe:
     """
 
     KEYFRAME_SIZE_NORMAL = 36
+    # NOTE: For pointers to previous keyframes, this must be padded to an even 24
     KEYFRAME_SIZE_COMPRESSED = 22
     LARGE_CONST = 0xBADC0DED
 

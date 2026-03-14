@@ -6,6 +6,8 @@ from .chunks.clump import Clump
 from .chunks.animanimation import AnimAnimation
 from .containers.header import Header
 
+from .chunks import Texture
+
 bl_info = {
     "name": "RenderWare importer/exporter for Settlers HoK/RoaE (.dff/.anm)",
     "author": "fritz_98",
@@ -14,6 +16,8 @@ bl_info = {
     "description": "RenderWare model and animation importer/exporter for Settlers HoK/RoaE",
     "category": "Import-Export"
 }
+
+
 
 def read_anm_file(context, filepath):
     file = open(filepath, "rb")
@@ -97,6 +101,27 @@ class ExportANM(bpy.types.Operator, ExportHelper):
             self.report({'WARNING'}, "FPS should be 30. Export results might differ from 3d view")
         write_anm_file(context, anim, self.filepath)
         return {"FINISHED"}
+    
+    def invoke(self, context, _event):
+        import os
+        if not self.filepath:
+            blend_filepath = context.blend_data.filepath
+            if not blend_filepath:
+                # Get armature object - if none is selected, take the first one
+                if bpy.context.object is not None and bpy.context.object.type == 'ARMATURE':
+                    armature = bpy.context.object
+                else:
+                    for armature in bpy.data.objects:
+                        if armature.data == bpy.data.armatures[0]:
+                            break
+                blend_filepath = "untitled_" + armature.animation_data.action.name
+            else:
+                blend_filepath = os.path.splitext(blend_filepath)[0]
+
+            self.filepath = blend_filepath + self.filename_ext
+
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
 class ImportDFF(bpy.types.Operator, ImportHelper):
     """Import class for Renderware 3.7.0.2 DFF files (Settlers HoK/RoaE)"""
@@ -123,9 +148,27 @@ class ImportDFF(bpy.types.Operator, ImportHelper):
     )
     
     def execute(self, context):
+        Texture.TEXTURE_PATH = context.preferences.addons[__package__].preferences.texture_path
+
         clump = read_dff_file(context, self.filepath)
         clump.build(self.import_geometries, self.import_frames)
         return {"FINISHED"}
+
+class ImportDFFPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__
+
+    texture_path: bpy.props.StringProperty(
+        # default = "",
+        default = "C:\\Spiele\\theSettlers5\\base\\shr\\graphics\\Textures\\",
+        name = "Texture file path",
+        description = "Path to Texures for imported models",
+        subtype = 'FILE_PATH'
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        row = layout.row()
+        row.prop(self, "texture_path", text="Path to Texures")
 
 # Only needed if you want to add into a dynamic menu
 def menu_func_import(self, context):
@@ -139,6 +182,7 @@ def menu_func_export(self, context):
 # Register and add to the "file selector" menu (required to use F3 search "Text Import Operator" for quick access)
 def register():
     bpy.utils.register_class(ImportDFF)
+    bpy.utils.register_class(ImportDFFPreferences)
     bpy.utils.register_class(ImportANM)
     bpy.utils.register_class(ExportANM)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
@@ -146,6 +190,7 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(ImportDFF)
+    bpy.utils.unregister_class(ImportDFFPreferences)
     bpy.utils.unregister_class(ImportANM)
     bpy.utils.unregister_class(ExportANM)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)

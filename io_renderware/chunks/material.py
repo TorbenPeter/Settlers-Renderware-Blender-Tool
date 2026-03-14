@@ -11,6 +11,7 @@ class Material(Container):
         super().__init__(header)
         self.color = None
         self.is_textured = False
+        self.has_mask = False
         self.ambient = 0
         self.specular = 0
         self.diffuse = 0

@@ -16,7 +16,8 @@ class GeometryList(Container):
         properties = self.children[Struct.ID_STAMP][0]
         self.number_of_geometries, = unpack("i", properties.content)
 
-    def build(self, armature, frame_list, frame_map):
-        # TODO: Handle the case where no frame was given
-        for index, geometry in enumerate(self.children[Geometry.ID_STAMP]):
-            geometry.build(armature, frame_list[frame_map[index]])
+    def build(self, armature=None):
+        for geometry in self.children[Geometry.ID_STAMP]:
+            # In a .dff file, the armature is included in the SkinPLG as well
+            # We ignore that here and hand down the armature of the frame list instead
+            geometry.build(armature)

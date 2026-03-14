@@ -82,7 +82,6 @@ class FrameList(Container):
         bpy.context.view_layer.objects.active = self.armature
         self.armature["Local Space"] = self.local_space
         self.armature["Update Locals"] = self.update_locals
-        # self.armature.show_in_front = True
         bpy.ops.object.mode_set(mode='EDIT')
         for bone_id in self.bone_ids:
             for frame in self.frames:
@@ -118,3 +117,21 @@ class FrameList(Container):
             bone.select_head = False
             bone.select_tail = False
         bpy.ops.object.mode_set(mode='OBJECT')
+
+        frame = self.frames[0]
+        for key, value in frame.user_data.items():
+            self.armature[key] = value
+
+        # Can't be in edit mode for this
+        for bone_id in self.bone_ids:
+            for frame in self.frames:
+                if (frame.bone is not None and frame.bone.id == bone_id):
+                    break
+            
+            for key, value in frame.user_data.items():
+                self.armature.pose.bones[str(bone_id)][key] = value
+
+    def load(self):
+        # TODO: If bone names are in certain number ranges for effects etc. and no tag is set, apply one automatically
+        # (Don't do this for animation bones, since not all of them are tagged)
+        return super().load()

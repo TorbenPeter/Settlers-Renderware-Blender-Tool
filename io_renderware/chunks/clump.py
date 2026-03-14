@@ -1,9 +1,11 @@
 from .container import Container
 from .framelist import FrameList
 from .geometrylist import GeometryList
+from .geometry import Geometry
 from .atomic import Atomic
 from .struct import Struct
 from struct import pack, unpack
+from mathutils import Matrix
 
 class Clump(Container):
 
@@ -51,15 +53,44 @@ class Clump(Container):
             self.frame_map[atomic.geometry_index] = atomic.frame_index
 
     def build(self, import_geometries=True, import_frames=True):
+    
         frame_list = None
         if import_frames:
             for frame_list in self.children[FrameList.ID_STAMP]:
                 frame_list.build()
 
-        if import_geometries:   
-            # Create the geometry with a pointer towards its respective frame. Parent information should be kept
+        if import_geometries:
             for geometry_list in self.children[GeometryList.ID_STAMP]:
                 if frame_list is not None:
-                    geometry_list.build(frame_list.armature, frame_list.frames, self.frame_map)
+                    geometry_list.build(frame_list.armature)
+                else:
+                    geometry_list.build()
 
-        # TODO: Build atomics (i.e. patricles)
+        if not import_frames or not import_geometries:
+            return
+        
+        armature = frame_list.armature
+
+        for index, geometry in enumerate(geometry_list.children[Geometry.ID_STAMP]):
+        
+            object = geometry.object
+            parent_frame = frame_list.frames[self.frame_map[index]]
+            
+            # Set object parent frame
+            constraint = object.constraints.new(type="CHILD_OF")
+            constraint.use_scale_x = False
+            constraint.use_scale_y = False
+            constraint.use_scale_z = False
+            constraint.target = armature
+
+            if parent_frame.bone is not None:
+                bone_id = str(parent_frame.bone.id)
+                constraint.subtarget = bone_id
+                if len(armature.pose.bones[bone_id].children) == 0:
+                    armature.pose.bones[bone_id].custom_shape = object
+                    armature.pose.bones[bone_id].use_custom_shape_bone_size = False
+
+            # Reset inverse matrix
+            constraint.inverse_matrix = Matrix.Identity(4)
+
+        # TODO: Build atomics (i.e. particles, etc.)
