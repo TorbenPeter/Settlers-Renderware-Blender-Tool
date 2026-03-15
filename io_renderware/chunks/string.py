@@ -6,4 +6,4 @@ class String(Content):
 
     def read(self, file):
         super().read(file)
-        self.content = self.content.decode("latin_1")
+        self.content = self.content.decode("latin_1").strip("\0")

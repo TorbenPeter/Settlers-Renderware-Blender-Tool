@@ -4,6 +4,7 @@ from re import match
 
 class UserDataPLG(Content):
 
+    DEFAULT_TITLE = "3dsmax User Properties"
     ID_STAMP = 0x0000011F
 
     def __init__(self, header):
@@ -32,5 +33,5 @@ class UserDataPLG(Content):
                 string = self.content[pointer+4:pointer+4+string_size].decode("ascii")
                 re_match = match(r"(?P<key>\w+)\s*=\s*(?P<value>.+)", string)
                 if re_match is not None:
-                    self.data[re_match.group("key")] = re_match.group("value")
+                    self.data[re_match.group("key")] = re_match.group("value").strip("\0")
                 pointer += 4+string_size

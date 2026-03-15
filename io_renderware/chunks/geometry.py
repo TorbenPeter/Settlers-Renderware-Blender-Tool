@@ -116,6 +116,7 @@ class Geometry(Container):
                 self.normals.append(normal)
             pointer += self.number_of_vertices*Vector3d.BYTE_SIZE
 
+        # We need to know the number of vertices for this, hence this is called (again) after self has been parsed
         extensions = self.children[Extension.ID_STAMP]
         for extension in extensions:
             for child_type, children in extension.children.items():
@@ -141,10 +142,10 @@ class Geometry(Container):
                     uv.data[loop_idx].uv = (texture_set[vert_idx].u, texture_set[vert_idx].v)
 
         # Create Materials and Textures
-        self.children[MaterialList.ID_STAMP][0].build()
+        self.children[MaterialList.ID_STAMP][0].build(mesh)
 
-        # for i, face in enumerate(mesh.polygons):
-        #     face.material_index = triangles[i].material
+        for i, face in enumerate(mesh.polygons):
+            face.material_index = self.triangles[i].material
 
         # Create Object to attach the mesh to
         object = bpy.data.objects.new("Object{:03}".format(index), mesh)

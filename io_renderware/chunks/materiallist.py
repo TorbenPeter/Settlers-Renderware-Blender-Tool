@@ -24,6 +24,6 @@ class MaterialList(Container):
         for material in self.children[Material.ID_STAMP]:
             pass
 
-    def build(self):
+    def build(self, mesh):
         for material in self.children[Material.ID_STAMP]:
-            material.build()
+            material.build(mesh)
