@@ -98,6 +98,7 @@ class Material(Container):
             uv_source = uv_sources[0]
             if len(uv_sources) > texture_id:
                 uv_source = uv_sources[texture_id]
+            # TODO: The combination with the base texture does not make sense in every case
             mixer = node_tree.nodes.new("ShaderNodeMix")
             mixer.data_type = "RGBA"
             mixer.blend_type = "MULTIPLY"

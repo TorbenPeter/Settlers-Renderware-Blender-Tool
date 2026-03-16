@@ -44,10 +44,6 @@ class FrameList(Container):
             parent_index, = unpack("i", properties.content[(byte+48):(byte+52)])
             if parent_index >= 0:
                 frame.parent = self.frames[parent_index]
-            # TODO: What to do with those flags?
-            # matrix_flags, = unpack("i", properties.content[(byte+52):(byte+56)])
-            # property1 = bool(matrix_flags & 0x000001) and bool(matrix_flags & 0x000002)
-            # property2 = bool(matrix_flags & 0x020000)
 
         # Get all bones
         for frame_id, extension in enumerate(self.children[Extension.ID_STAMP]):
@@ -78,6 +74,7 @@ class FrameList(Container):
     def build(self):
         armature = bpy.data.armatures.new(name="Armature")
         self.armature = bpy.data.objects.new("Armature", armature)
+        # TODO: Sometimes there might not be an active collection
         bpy.context.collection.objects.link(self.armature)
         bpy.context.view_layer.objects.active = self.armature
         self.armature["Local Space"] = self.local_space

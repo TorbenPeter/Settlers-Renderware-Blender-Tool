@@ -31,7 +31,7 @@ class MaterialEffectsPLG(Content):
 
         self.type, = unpack("I", file.read(4))
 
-        # TODO: Implement the rest of them?
+        # NOTE: Currently, only DUAL and UVTRANSFORM are supported. Other effects don't occur in the Settlers games which makes them hard to verify
         if (self.type == MaterialEffectsPLG.NULL or
             self.type == MaterialEffectsPLG.ENVMAP or
             self.type == MaterialEffectsPLG.BUMPMAP or

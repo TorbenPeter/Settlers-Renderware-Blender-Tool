@@ -13,6 +13,7 @@ from .hanimplg import HAnimPLG
 from .material import Material
 from .materialeffectsplg import MaterialEffectsPLG
 from .materiallist import MaterialList
+from .morphplg import MorphPLG
 from .particlestandardplg import ParticleStandardPLG
 from .righttorender import RightToRender
 from .skinplg import SkinPLG

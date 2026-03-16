@@ -12,6 +12,8 @@ class AnimAnimation(Content):
 
     TYPE_NORMAL = 1
     TYPE_COMPRESSED = 2
+    TYPE_UVANIM_LINEAR = 448
+    TYPE_UVANIM_PARAM = 449
     DEFAULT_FPS = 30
     ID_STAMP = 0x0000001B
 
@@ -73,7 +75,6 @@ class AnimAnimation(Content):
         fps = AnimAnimation.DEFAULT_FPS
         scene = bpy.data.scenes[0]
         scene.render.fps = fps
-        scene.frame_end = scene.frame_start + int(self.duration*fps)
 
         permutation = Matrix.Identity(4)
         if "Local Space" in armature:

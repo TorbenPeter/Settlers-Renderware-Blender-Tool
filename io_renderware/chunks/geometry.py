@@ -1,6 +1,7 @@
 from .container import Container
 from .struct import Struct
 from .extension import Extension
+from .morphplg import MorphPLG
 from .skinplg import SkinPLG
 from .materiallist import MaterialList
 from ..containers.rgba import RGBA
@@ -22,11 +23,12 @@ class Geometry(Container):
         self.positions = False
         self.textured = False
         self.prelit = False
-        self.has_normals = False
         self.light = False
         self.modulate_material_color = False
         self.textured2 = False
         self.native = False
+        self.has_vertices = False
+        self.has_normals = False
         self.number_of_triangles = 0
         self.number_of_vertices = 0
         self.number_of_morph_targets = 0
@@ -35,9 +37,8 @@ class Geometry(Container):
         self.texture_sets = []
         self.triangles = []
         self.bounding_sphere = None
-        self.has_vertices = False
-        self.vertices = []
-        self.normals = []
+        self.vertex_sets = []
+        self.normal_sets = []
 
     def read(self, file):
         super().read(file)
@@ -45,11 +46,6 @@ class Geometry(Container):
         properties = self.children[Struct.ID_STAMP][0]
         format, = unpack("I", properties.content[:4])
         self.number_of_triangles, self.number_of_vertices, self.number_of_morph_targets = unpack("3I", properties.content[4:16])
-
-        # TODO: Empty meshes (e.g. in effects) have 0 morph targets
-        # TODO: Standarte (and possibly other entities) have multiple morph targets
-        # TODO: Store morph targets as shape key. Basic shape key can always be created
-        assert (self.number_of_morph_targets <= 1), "Multiple morph targets are not supported in this version"
 
         self.tristrip = bool(format & 0x00000001)
         self.positions = bool(format & 0x00000002)
@@ -94,27 +90,33 @@ class Geometry(Container):
             self.triangles.append(triangle)
         pointer += self.number_of_triangles*Triangle.BYTE_SIZE
 
-        self.bounding_sphere = Sphere()
-        self.bounding_sphere.read(properties.content[pointer:pointer+Sphere.BYTE_SIZE])
-        pointer += Sphere.BYTE_SIZE
-        self.has_vertices, self.has_normals = unpack("II", properties.content[pointer:pointer+8])
-        self.has_vertices = bool(self.has_vertices)
-        self.has_normals = bool(self.has_normals)
-        pointer += 8
+        for _ in range(self.number_of_morph_targets):
+            self.bounding_sphere = Sphere()
+            self.bounding_sphere.read(properties.content[pointer:pointer+Sphere.BYTE_SIZE])
+            pointer += Sphere.BYTE_SIZE
+            self.has_vertices, self.has_normals = unpack("II", properties.content[pointer:pointer+8])
+            self.has_vertices = bool(self.has_vertices)
+            self.has_normals = bool(self.has_normals)
+            pointer += 8
 
-        if self.has_vertices:
-            for byte in range(pointer, self.number_of_vertices*Vector3d.BYTE_SIZE + pointer, Vector3d.BYTE_SIZE):
-                vertex = Vector3d()
-                vertex.read(properties.content[byte:byte+Vector3d.BYTE_SIZE])
-                self.vertices.append(vertex)
-            pointer += self.number_of_vertices*Vector3d.BYTE_SIZE
+            vertices = []
+            normals = []
 
-        if self.has_normals:
-            for byte in range(pointer, self.number_of_vertices*Vector3d.BYTE_SIZE + pointer, Vector3d.BYTE_SIZE):
-                normal = Vector3d()
-                normal.read(properties.content[byte:byte+Vector3d.BYTE_SIZE])
-                self.normals.append(normal)
-            pointer += self.number_of_vertices*Vector3d.BYTE_SIZE
+            if self.has_vertices:
+                for byte in range(pointer, self.number_of_vertices*Vector3d.BYTE_SIZE + pointer, Vector3d.BYTE_SIZE):
+                    vertex = Vector3d()
+                    vertex.read(properties.content[byte:byte+Vector3d.BYTE_SIZE])
+                    vertices.append(vertex)
+                pointer += self.number_of_vertices*Vector3d.BYTE_SIZE
+                self.vertex_sets.append(vertices)
+
+            if self.has_normals:
+                for byte in range(pointer, self.number_of_vertices*Vector3d.BYTE_SIZE + pointer, Vector3d.BYTE_SIZE):
+                    normal = Vector3d()
+                    normal.read(properties.content[byte:byte+Vector3d.BYTE_SIZE])
+                    normals.append(normal)
+                pointer += self.number_of_vertices*Vector3d.BYTE_SIZE
+                self.normal_sets.append(normals)
 
         # We need to know the number of vertices for this, hence this is called (again) after self has been parsed
         extensions = self.children[Extension.ID_STAMP]
@@ -126,8 +128,12 @@ class Geometry(Container):
 
 
     def build(self, armature):
-        vertices = [vertex.as_tuple() for vertex in self.vertices]
+        
         triangles = [triangle.as_tuple() for triangle in self.triangles]
+        if self.number_of_morph_targets <= 0 or not self.has_vertices:
+            vertices = []
+        else:
+            vertices = [vertex.as_tuple() for vertex in self.vertex_sets[0]]
 
         # Create Mesh
         index = len(bpy.data.meshes)
@@ -153,13 +159,33 @@ class Geometry(Container):
         # Link Object to current collection
         bpy.context.collection.objects.link(object)
 
+        if self.number_of_morph_targets <= 0:
+            return
+
+        shape_key_basis = object.shape_key_add(name="Basis")
+        object.data.shape_keys.use_relative = False
+        shape_key_basis.interpolation = "KEY_LINEAR"
+
+        # Create potential subsequent vertex sets
+        if self.number_of_morph_targets > 1:
+            for index, vertex_set in enumerate(self.vertex_sets[1:]):
+                # vertices = [vertex.as_tuple() for vertex in vertex_set]
+                shape_key = object.shape_key_add(name="Key"+str(index+1))
+                shape_key.interpolation = "KEY_LINEAR"
+                for i in range(len(vertices)):
+                    shape_key.data[i].co.x = vertex_set[i].x
+                    shape_key.data[i].co.y = vertex_set[i].y
+                    shape_key.data[i].co.z = vertex_set[i].z
+
         self.object = object
 
-        # TODO: MorphPLG
         # TODO: UserDataPLG
         extensions = self.children[Extension.ID_STAMP]
         for extension in extensions:
             for child_type, children in extension.children.items():
-                for child in children:
-                    if child_type == SkinPLG.ID_STAMP and armature is not None:
+                if child_type == SkinPLG.ID_STAMP and armature is not None:
+                    for child in children:
                         child.build(object, armature)
+                elif child_type == MorphPLG.ID_STAMP:
+                    for child in children:
+                        child.build(object)
