@@ -1,4 +1,5 @@
 from .vector3d import Vector3d
+from mathutils import Matrix
 
 class Rotation3d:
     """
@@ -19,3 +20,8 @@ class Rotation3d:
 
     def as_tuple(self):
         return (self.right.as_tuple(), self.up.as_tuple(), self.at.as_tuple())
+    
+    def from_matrix(self, matrix : Matrix):
+        self.right = Vector3d(*matrix.row[0])
+        self.up = Vector3d(*matrix.row[1])
+        self.at = Vector3d(*matrix.row[2])

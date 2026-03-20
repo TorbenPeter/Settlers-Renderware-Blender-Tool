@@ -21,3 +21,4 @@ from .string import String
 from .struct import Struct
 from .texture import Texture
 from .userdataplg import UserDataPLG
+from .uvanimationplg import UVAnimationPLG

@@ -1,11 +1,11 @@
 from .container import Container
 from .framelist import FrameList
 from .geometrylist import GeometryList
-from .geometry import Geometry
 from .atomic import Atomic
 from .struct import Struct
+from ..containers.header import Header
 from struct import pack, unpack
-from mathutils import Matrix
+import bpy
 
 class Clump(Container):
 
@@ -38,7 +38,8 @@ class Clump(Container):
         self.number_of_atomics = 0
         self.number_of_lights = 0
         self.number_of_cameras = 0
-        self.frame_map = {}
+        self.frame_list = None
+        self.geometry_list = None
 
     def read(self, file):
         super().read(file)
@@ -47,50 +48,30 @@ class Clump(Container):
         self.number_of_atomics = properties[0]
         self.number_of_lights = properties[1]
         self.number_of_cameras = properties[2]
-
-        # Fetch all atomics and assign all frames to their geometries
-        for atomic in self.children[Atomic.ID_STAMP]:
-            self.frame_map[atomic.geometry_index] = atomic.frame_index
+        self.frame_list = self.children[FrameList.ID_STAMP][0]
+        self.geometry_list = self.children[GeometryList.ID_STAMP][0]
 
     def build(self, import_geometries=True, import_frames=True):
     
-        frame_list = None
         if import_frames:
-            for frame_list in self.children[FrameList.ID_STAMP]:
-                frame_list.build()
+            self.frame_list.build()
+        else:
+            self.frame_list = None
 
         if import_geometries:
-            for geometry_list in self.children[GeometryList.ID_STAMP]:
-                if frame_list is not None:
-                    geometry_list.build(frame_list.armature)
-                else:
-                    geometry_list.build()
+            self.geometry_list.build(self.frame_list)
 
         if not import_frames or not import_geometries:
             return
         
-        armature = frame_list.armature
+        for atomic in self.children[Atomic.ID_STAMP]:
+            atomic.build(self.frame_list, self.geometry_list)
 
-        for index, geometry in enumerate(geometry_list.children[Geometry.ID_STAMP]):
-        
-            object = geometry.object
-            parent_frame = frame_list.frames[self.frame_map[index]]
-            
-            # Set object parent frame
-            constraint = object.constraints.new(type="CHILD_OF")
-            constraint.use_scale_x = False
-            constraint.use_scale_y = False
-            constraint.use_scale_z = False
-            constraint.target = armature
+    def load(self):
+        self.frame_list = FrameList(Header())
+        self.frame_list.load()
 
-            if parent_frame.bone is not None:
-                bone_id = str(parent_frame.bone.id)
-                constraint.subtarget = bone_id
-                if len(armature.pose.bones[bone_id].children) == 0:
-                    armature.pose.bones[bone_id].custom_shape = object
-                    armature.pose.bones[bone_id].use_custom_shape_bone_size = False
+        self.geometry_list = GeometryList(Header())
+        self.geometry_list.load()
 
-            # Reset inverse matrix
-            constraint.inverse_matrix = Matrix.Identity(4)
-
-        # TODO: Build atomics (i.e. particles, etc.)
+        self.number_of_atomics = self.geometry_list.number_of_geometries

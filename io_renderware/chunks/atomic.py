@@ -1,6 +1,10 @@
 from .container import Container
 from .struct import Struct
+from .geometry import Geometry
+from .extension import Extension
+from .particlestandardplg import ParticleStandardPLG
 from struct import pack, unpack
+from mathutils import Matrix
 
 class Atomic(Container):
 
@@ -20,4 +24,32 @@ class Atomic(Container):
         self.collision_test = bool(flags & 0x01)
         self.render = bool(flags & 0x04)
 
-        # TODO: Material Effects and Particles
+    def build(self, frame_list, geometry_list):
+
+        armature = frame_list.armature
+        object = geometry_list.children[Geometry.ID_STAMP][self.geometry_index].object
+        parent_frame = frame_list.frames[self.frame_index]
+        
+        # Set object parent frame
+        constraint = object.constraints.new(type="CHILD_OF")
+        constraint.use_scale_x = False
+        constraint.use_scale_y = False
+        constraint.use_scale_z = False
+        constraint.target = armature
+
+        if parent_frame.bone is not None:
+            bone_id = str(parent_frame.bone.id)
+            constraint.subtarget = bone_id
+            if len(armature.pose.bones[bone_id].children) == 0:
+                armature.pose.bones[bone_id].custom_shape = object
+                armature.pose.bones[bone_id].use_custom_shape_bone_size = False
+
+        # Reset inverse matrix
+        constraint.inverse_matrix = Matrix.Identity(4)
+
+        extensions = self.children[Extension.ID_STAMP]
+        for extension in extensions:
+            for child_type, children in extension.children.items():
+                if child_type == ParticleStandardPLG.ID_STAMP:
+                    for child in children:
+                        child.build(object)

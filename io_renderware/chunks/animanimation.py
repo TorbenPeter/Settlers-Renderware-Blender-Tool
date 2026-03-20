@@ -78,7 +78,7 @@ class AnimAnimation(Content):
 
         permutation = Matrix.Identity(4)
         if "Local Space" in armature:
-            permutation = FrameList.LOCAL_MATRIX[armature["Local Space"]].to_4x4()
+            permutation = FrameList.LOCAL_MATRIX[armature["Local Space"]]
 
         for keyframe in self.keyframes:
             frame = scene.frame_start + keyframe.time * fps
@@ -92,18 +92,18 @@ class AnimAnimation(Content):
             if self.type == AnimAnimation.TYPE_COMPRESSED:
                 location = self.compression_range["Base"] + location * self.compression_range["Offset"]
 
-            parent_rotation = Matrix.Identity(4) @ permutation.inverted()
+            parent_rotation = Matrix.Identity(4) @ permutation
             if rest_bone.parent is not None:
                 parent_rotation = rest_bone.parent.matrix_local
 
-            parent_rotation = parent_rotation @ permutation
-            rotation = (parent_rotation @ rotation) @ permutation.inverted()
+            parent_rotation = parent_rotation @ permutation.inverted()
+            rotation = (parent_rotation @ rotation) @ permutation
             rotation = rest_bone.matrix_local.inverted() @ rotation
             rotation = rotation.to_quaternion()
 
             location = rest_bone.matrix_local.inverted() @ (parent_rotation @ location)
 
-            pose_bone.matrix_basis = Matrix.LocRotScale(location, rotation, (1, 1, 1))
+            pose_bone.matrix_basis = Matrix.LocRotScale(location, rotation, None)
             pose_bone.keyframe_insert(data_path="rotation_quaternion", frame=frame)
             pose_bone.keyframe_insert(data_path="location", frame=frame)
 
@@ -144,7 +144,13 @@ class AnimAnimation(Content):
         keyframes = defaultdict(lambda: defaultdict(lambda: {"location": [0, 0, 0,], "rotation": [1, 0, 0, 0]}))
         for fcurve in fcurves:
             data_path_split = fcurve.data_path.split(".")
-            bone_name = eval(base_path + ".".join(data_path_split[:-1])).name
+            # Never blindly eval!
+            # Keyframed bone might've been deleted
+            try:
+                bone = eval(base_path + ".".join(data_path_split[:-1]))
+            except:
+                continue
+            bone_name = bone.name
             if bone_name in bones:
                 for keyframe_point in fcurve.keyframe_points:
                     time, value = keyframe_point.co
@@ -168,7 +174,7 @@ class AnimAnimation(Content):
 
         permutation = Matrix.Identity(4)
         if "Local Space" in armature:
-            permutation = FrameList.LOCAL_MATRIX[armature["Local Space"]].to_4x4()
+            permutation = FrameList.LOCAL_MATRIX[armature["Local Space"]]
 
         if self.type == AnimAnimation.TYPE_COMPRESSED:
             compression_range = {"Min": [0, 0, 0], "Max": [0, 0, 0]}
@@ -184,14 +190,14 @@ class AnimAnimation(Content):
             location = Vector(keyframe[2]["location"])
             rotation = Quaternion(keyframe[2]["rotation"]).to_matrix().to_4x4()
 
-            parent_rotation = Matrix.Identity(4) @ permutation.inverted()
+            parent_rotation = Matrix.Identity(4) @ permutation
             if rest_bone.parent is not None:
                 parent_rotation = rest_bone.parent.matrix_local
 
-            parent_rotation = parent_rotation @ permutation
+            parent_rotation = parent_rotation @ permutation.inverted()
 
             rotation = rest_bone.matrix_local @ rotation
-            rotation = parent_rotation.inverted() @ (rotation @ permutation)
+            rotation = parent_rotation.inverted() @ (rotation @ permutation.inverted())
             rotation = rotation.to_quaternion()
 
             location = parent_rotation.inverted() @ (rest_bone.matrix_local @ location)

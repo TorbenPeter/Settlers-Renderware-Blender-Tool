@@ -38,3 +38,5 @@ class HAnimPLG(Content):
             pop = bool(flags & 0x01)
             push = bool(flags & 0x02)
             self.bone_info.append((bone_id, bone_index, pop, push))
+
+        self.bone_info.sort(key = lambda x: x[1])

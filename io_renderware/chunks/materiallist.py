@@ -3,6 +3,7 @@ from .struct import Struct
 from .material import Material
 from struct import pack, unpack
 
+# We are living in a Material world and I am a Material List
 class MaterialList(Container):
 
     ID_STAMP = 0x00000008

@@ -7,21 +7,16 @@ class Vector3d:
 
     BYTE_SIZE = 12
 
-    def __init__(self, x : float = 0, y : float = 0, z : float = 0):
+    @staticmethod
+    def round_zeros(x):
         if abs(x) < 1e-6:
-            self.x = 0
-        else:
-            self.x = x
+            return 0
+        return x
 
-        if abs(y) < 1e-6:
-            self.y = 0
-        else: 
-            self.y = y
-
-        if abs(z) < 1e-6:
-            self.z = 0
-        else:
-            self.z = z
+    def __init__(self, x : float = 0, y : float = 0, z : float = 0):
+        self.x = Vector3d.round_zeros(x)
+        self.y = Vector3d.round_zeros(y)
+        self.z = Vector3d.round_zeros(z)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):

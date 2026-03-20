@@ -3,6 +3,7 @@ from .struct import Struct
 from .texture import Texture
 from .extension import Extension
 from .materialeffectsplg import MaterialEffectsPLG
+from .uvanimationplg import UVAnimationPLG
 from ..containers.rgba import RGBA
 from struct import pack, unpack
 import bpy
@@ -91,6 +92,9 @@ class Material(Container):
                         uv_source = uv_sources[1]
                     for child in children:
                         child.build(textures[0], node_tree, uv_source, properties["Base Color"])
+                if child_type == UVAnimationPLG.ID_STAMP:
+                    for child in children:
+                        child.build(self.material)
 
         texture_id = 1
 

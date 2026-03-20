@@ -1,28 +1,28 @@
-from .vector3d import Vector3d
-from .rotation3d import Rotation3d
-from mathutils import Vector, Matrix
+from mathutils import Matrix
 
 class Frame:
 
-    def __init__(self, rotation : Rotation3d, position : Vector3d):
-        self.rotation = rotation
-        self.position = position
+    def __init__(self, matrix : Matrix = None):
+        self.matrix = matrix
         self.parent = None
         self.user_data = {}
         self.bone = None
 
-    def get_canonical_position(self):
+    def get_world_matrix(self):
+        if self.matrix is None:
+            return
         frame = self
-        position = Vector(self.position.as_tuple())
+        matrix = self.matrix.copy()
         while frame.parent is not None:
-            position = position @ Matrix(frame.parent.rotation.as_tuple()) + Vector(frame.parent.position.as_tuple())
+            matrix = frame.parent.matrix @ matrix
             frame = frame.parent
-        return position
+        return matrix
     
-    def get_canonical_rotation(self):
-        frame = self
-        rotation = Matrix(self.rotation.as_tuple())
-        while frame.parent is not None:
-            rotation = rotation @ Matrix(frame.parent.rotation.as_tuple())
-            frame = frame.parent
-        return rotation
+    def get_local_matrix(self):
+        if self.bone is None:
+            return Matrix.Identity(4)
+        
+        if self.parent is not None and self.parent.bone is not None:
+            return self.parent.bone.matrix.inverted() @ self.bone.matrix
+        else:
+            return self.bone.matrix

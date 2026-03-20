@@ -1,9 +1,12 @@
 from collections import defaultdict
 from .chunk import Chunk
 from .content import Content
+from .struct import Struct
 from ..containers.header import Header
 
 class Container(Chunk):
+
+    IGNORE_UNKNOWN_CHUNKS = False
 
     def __init__(self, header):
         super().__init__(header)
@@ -28,7 +31,10 @@ class Container(Chunk):
                         chunk = subclass(header)
                         break
                 else:
-                    raise Exception("Chunk type with id " + str(header.chunk_id_stamp) + " not implemented")
+                    if Container.IGNORE_UNKNOWN_CHUNKS:
+                        chunk = Struct(header)
+                    else:
+                        raise Exception("Chunk type with id " + str(header.chunk_id_stamp) + " not implemented")
                 
             self.children[header.chunk_id_stamp].append(chunk)
             chunk.read(file)

@@ -159,6 +159,8 @@ class Geometry(Container):
         # Link Object to current collection
         bpy.context.collection.objects.link(object)
 
+        self.object = object
+
         if self.number_of_morph_targets <= 0:
             return
 
@@ -176,8 +178,6 @@ class Geometry(Container):
                     shape_key.data[i].co.x = vertex_set[i].x
                     shape_key.data[i].co.y = vertex_set[i].y
                     shape_key.data[i].co.z = vertex_set[i].z
-
-        self.object = object
 
         # TODO: UserDataPLG
         extensions = self.children[Extension.ID_STAMP]

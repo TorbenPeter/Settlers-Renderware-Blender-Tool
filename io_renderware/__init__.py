@@ -6,6 +6,7 @@ from .chunks.clump import Clump
 from .chunks.animanimation import AnimAnimation
 from .containers.header import Header
 
+from .chunks import Container
 from .chunks import Texture
 
 bl_info = {
@@ -56,6 +57,12 @@ def read_dff_file(context, filepath):
 
     return clump
 
+def write_dff_file(context, clump, filepath):
+    file = open(filepath, "wb")
+    string = clump.write()
+    file.write(string)
+    file.close()
+
 class ImportANM(bpy.types.Operator, ImportHelper):
     """Import class for Renderware ANM files (Settlers HoK/RoaE)"""
     bl_label = "Import RW ANM File"
@@ -68,14 +75,14 @@ class ImportANM(bpy.types.Operator, ImportHelper):
     
     def execute(self, context):
         anim = read_anm_file(context, self.filepath)
-        m = match(".*_(?P<bone_id>\d+)\.anm", self.filepath)
+        m = match(r".*_(?P<bone_id>\d+)\.anm", self.filepath)
         root = None
         name = ""
         if m is not None:
             root = m.group("bone_id")
             name = root
         else:
-            m = match(".*_(?P<anim_name>\w+)\.anm", self.filepath)
+            m = match(r".*_(?P<anim_name>\w+)\.anm", self.filepath)
             if m is not None:
                 name = m.group("anim_name")
         anim.build(root=root, name=name)
@@ -93,7 +100,7 @@ class ExportANM(bpy.types.Operator, ExportHelper):
     
     def execute(self, context):
         anim = AnimAnimation(Header())
-        m = match(".*_(?P<bone_id>\d+)\.anm", self.filepath)
+        m = match(r".*_(?P<bone_id>\d+)\.anm", self.filepath)
         root = None
         if m is not None:
             root = m.group("bone_id")
@@ -146,12 +153,35 @@ class ImportDFF(bpy.types.Operator, ImportHelper):
         description="Import all frames included. Some geometries may be displaced if frames are not imported",
         default=True,
     )
+
+    ignore_unknown_chunks: bpy.props.BoolProperty(
+        name="Ignore unknown chunks",
+        description="Ignore chunk types for which there is no import/export module",
+        default=False,
+    )
     
     def execute(self, context):
         Texture.TEXTURE_PATH = context.preferences.addons[__package__].preferences.texture_path
+        Container.IGNORE_UNKNOWN_CHUNKS = self.ignore_unknown_chunks
 
         clump = read_dff_file(context, self.filepath)
         clump.build(self.import_geometries, self.import_frames)
+        return {"FINISHED"}
+    
+class ExportDFF(bpy.types.Operator, ExportHelper):
+    """Export class for Renderware 3.7.0.2 DFF files (Settlers HoK/RoaE)"""
+    bl_label = "Export RW DFF File"
+    bl_idname = "export_model.dff"
+    bl_description = "Export class for Renderware 3.7.0.2 DFF files (Settlers HoK/RoaE)"
+
+    filename_ext = ".dff"
+
+    filter_glob: bpy.props.StringProperty(default="*.dff", options={'HIDDEN'}, maxlen=255)
+    
+    def execute(self, context):
+        clump = Clump(Header())
+        clump.load()
+        # write_dff_file(context, clump, self.filepath)
         return {"FINISHED"}
 
 class ImportDFFPreferences(bpy.types.AddonPreferences):
@@ -176,7 +206,7 @@ def menu_func_import(self, context):
     self.layout.operator(ImportANM.bl_idname, text="Renderware Animation (.anm)")
 
 def menu_func_export(self, context):
-    # self.layout.operator(ExportANM.bl_idname, text="Renderware Model (.dff)")
+    self.layout.operator(ExportDFF.bl_idname, text="Renderware Model (.dff)")
     self.layout.operator(ExportANM.bl_idname, text="Renderware Animation (.anm)")
 
 # Register and add to the "file selector" menu (required to use F3 search "Text Import Operator" for quick access)
@@ -184,6 +214,7 @@ def register():
     bpy.utils.register_class(ImportDFF)
     bpy.utils.register_class(ImportDFFPreferences)
     bpy.utils.register_class(ImportANM)
+    bpy.utils.register_class(ExportDFF)
     bpy.utils.register_class(ExportANM)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
@@ -192,6 +223,7 @@ def unregister():
     bpy.utils.unregister_class(ImportDFF)
     bpy.utils.unregister_class(ImportDFFPreferences)
     bpy.utils.unregister_class(ImportANM)
+    bpy.utils.unregister_class(ExportDFF)
     bpy.utils.unregister_class(ExportANM)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
