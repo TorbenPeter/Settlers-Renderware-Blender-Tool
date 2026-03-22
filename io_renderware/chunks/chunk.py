@@ -6,7 +6,7 @@ class Chunk(ABC):
 
     def __init__(self, header):
         self.header = header
-        self.header.chunk_id_stamp = self.ID_STAMP
+        self.header.chunk_id_stamp = self.__class__.ID_STAMP
 
     @abstractmethod
     def read(self, file):
@@ -17,7 +17,7 @@ class Chunk(ABC):
         pass
 
     @abstractmethod
-    def load(self):
+    def fetch(self):
         pass
 
     @abstractmethod

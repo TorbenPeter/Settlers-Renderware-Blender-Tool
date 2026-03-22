@@ -157,7 +157,8 @@ class Geometry(Container):
         object = bpy.data.objects.new("Object{:03}".format(index), mesh)
 
         # Link Object to current collection
-        bpy.context.collection.objects.link(object)
+        if bpy.context.collection is not None:
+            bpy.context.collection.objects.link(object)
 
         self.object = object
 
@@ -171,7 +172,6 @@ class Geometry(Container):
         # Create potential subsequent vertex sets
         if self.number_of_morph_targets > 1:
             for index, vertex_set in enumerate(self.vertex_sets[1:]):
-                # vertices = [vertex.as_tuple() for vertex in vertex_set]
                 shape_key = object.shape_key_add(name="Key"+str(index+1))
                 shape_key.interpolation = "KEY_LINEAR"
                 for i in range(len(vertices)):

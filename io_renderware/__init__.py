@@ -104,7 +104,7 @@ class ExportANM(bpy.types.Operator, ExportHelper):
         root = None
         if m is not None:
             root = m.group("bone_id")
-        if anim.load(root):
+        if anim.fetch(root):
             self.report({'WARNING'}, "FPS should be 30. Export results might differ from 3d view")
         write_anm_file(context, anim, self.filepath)
         return {"FINISHED"}
@@ -180,8 +180,8 @@ class ExportDFF(bpy.types.Operator, ExportHelper):
     
     def execute(self, context):
         clump = Clump(Header())
-        clump.load()
-        # write_dff_file(context, clump, self.filepath)
+        clump.fetch()
+        write_dff_file(context, clump, self.filepath)
         return {"FINISHED"}
 
 class ImportDFFPreferences(bpy.types.AddonPreferences):

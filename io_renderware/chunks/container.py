@@ -41,14 +41,17 @@ class Container(Chunk):
 
             remaining_size -= header.chunk_size + Header.HEADER_SIZE
 
-    # TODO
     def build(self):
         pass
 
-    # TODO
-    def load(self):
+    def fetch(self):
         pass
 
-    # TODO
     def write(self):
-        pass
+        content = b""
+        for _, children in self.children.items():
+            for child in children:
+                content += child.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

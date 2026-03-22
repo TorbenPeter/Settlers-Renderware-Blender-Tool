@@ -1,6 +1,7 @@
 from .container import Container
 from .struct import Struct
 from .string import String
+from ..util import display
 from struct import pack, unpack
 import bpy
 
@@ -39,8 +40,11 @@ class Texture(Container):
         texture_node = node_tree.nodes.new("ShaderNodeTexImage")
         
         if Texture.TEXTURE_PATH:
-            image = bpy.data.images.load(Texture.TEXTURE_PATH + self.texture_name + ".dds", check_existing = True)
-            texture_node.image = image
+            try:
+                image = bpy.data.images.load(Texture.TEXTURE_PATH + self.texture_name + ".dds", check_existing = True)
+                texture_node.image = image
+            except:
+                bpy.context.window_manager.popup_menu(display("Texture {} could not be opened".format(self.texture_name)), title="Warning", icon='ERROR')
         
         # NOTE: We ignore uv addressing here at the moment, since it appears to be the same for all models for now
         # If that changes, we need to modify the texture node here

@@ -20,7 +20,7 @@ class MaterialList(Container):
         self.number_of_materials, = unpack("I", properties.content[:4])
         material_ids = unpack("{}i".format(self.number_of_materials), properties.content[4:4+self.number_of_materials*4])
 
-        # TODO: Gather all materials from children into list. Merge, if applicable
+        # TODO: Gather all materials from children into list. Merge, if applicable (only relevant if Material ID != -1)
         for material in self.children[Material.ID_STAMP]:
             pass
 

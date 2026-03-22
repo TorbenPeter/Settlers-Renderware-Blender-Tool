@@ -4,10 +4,10 @@ from struct import pack, unpack
 class HAnimPLG(Content):
 
     ID_STAMP = 0x0000011E
+    CONST = 256
 
     def __init__(self, header):
         super().__init__(header)
-        self.version = 0
         self.id = 0
         self.number_of_bones = 0
         self.subhierarchy = False
@@ -21,7 +21,7 @@ class HAnimPLG(Content):
 
     def read(self, file):
         super().read(file)
-        self.version, self.id, self.number_of_bones = unpack("III", self.content[:12])
+        const, self.id, self.number_of_bones = unpack("III", self.content[:12])
 
         if self.number_of_bones <= 0:
             return
@@ -35,8 +35,20 @@ class HAnimPLG(Content):
 
         for byte in range(20, 20+self.number_of_bones*12, 12):
             bone_id, bone_index, flags = unpack("III", self.content[byte:byte+12])
-            pop = bool(flags & 0x01)
-            push = bool(flags & 0x02)
-            self.bone_info.append((bone_id, bone_index, pop, push))
+            self.bone_info.append((bone_id, bone_index, flags))
 
         self.bone_info.sort(key = lambda x: x[1])
+
+    def write(self):
+        content = b""
+        content += pack("III", HAnimPLG.CONST, self.id, self.number_of_bones)
+
+        if self.number_of_bones > 0:
+            flags = int(self.subhierarchy) | int(self.no_matrices) << 1 | int(self.update_modelling_matrices) << 12 | int(self.update_ltms) << 13 | int(self.local_space_matrices) << 14
+            content += pack("II", flags, self.keyframe_size)
+
+            for bone_info in self.bone_info:
+                content += pack("III", *bone_info)
+            
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

@@ -69,7 +69,7 @@ class SkinPLG(Content):
                     bone = armature.pose.bones[bone_index]
                     object.vertex_groups[bone.name].add((vertex_id,), weight, 'ADD')
 
-    def load(self):
+    def fetch(self):
         # TODO: self.used_bones are in the order of appearance when iterating the vertices in order
         # TODO: Maybe this order also determines the splits
-        return super().load()
+        return super().fetch()

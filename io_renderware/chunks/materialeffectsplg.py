@@ -31,11 +31,12 @@ class MaterialEffectsPLG(Content):
 
         self.type, = unpack("I", file.read(4))
 
-        # NOTE: Currently, only DUAL and UVTRANSFORM are supported. Other effects don't occur in the Settlers games which makes them hard to verify
+        # NOTE: Currently, only DUAL is supported. Other effects don't occur in the Settlers games which makes them hard to verify
         if (self.type == MaterialEffectsPLG.NULL or
             self.type == MaterialEffectsPLG.ENVMAP or
             self.type == MaterialEffectsPLG.BUMPMAP or
             self.type == MaterialEffectsPLG.BUMPENVMAP or
+            self.type == MaterialEffectsPLG.UVTRANSFORM or
             self.type == MaterialEffectsPLG.DUALUVTRANSFORM):
             file.read(self.header.chunk_size - 4)
             return
@@ -56,10 +57,6 @@ class MaterialEffectsPLG(Content):
             pointer = 4 + 16 + Header.HEADER_SIZE + texture_header.chunk_size
             file.read(self.header.chunk_size - pointer)
             self.textures.append(texture)
-        elif self.type == MaterialEffectsPLG.UVTRANSFORM:
-            # TODO
-            file.read(self.header.chunk_size - 4)
-            pass
 
     def build(self, texture, node_tree, input, output):
 
@@ -85,6 +82,3 @@ class MaterialEffectsPLG(Content):
             elif self.source_blend_mode == self.destination_blend_mode == 2:
                 # Used in S5 for speculars
                 node_tree.links.new(mixer.inputs["Factor"], self.textures[0].texture_node.outputs["Color"])
-
-        elif self.type == MaterialEffectsPLG.UVTRANSFORM:
-            pass

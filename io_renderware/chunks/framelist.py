@@ -3,13 +3,14 @@ from .struct import Struct
 from .extension import Extension
 from .hanimplg import HAnimPLG
 from .userdataplg import UserDataPLG
-from ..containers.vector3d import Vector3d
-from ..containers.rotation3d import Rotation3d
+from ..containers.header import Header
 from ..containers.frame import Frame
 from ..containers.bone import Bone
+from ..util import get_current_armature
 from struct import pack, unpack
 import bpy
 from mathutils import Vector, Matrix
+from random import randint
 
 class FrameList(Container):
 
@@ -74,8 +75,8 @@ class FrameList(Container):
     def build(self):
         armature = bpy.data.armatures.new(name="Armature")
         self.armature = bpy.data.objects.new("Armature", armature)
-        # TODO: Sometimes there might not be an active collection
-        bpy.context.collection.objects.link(self.armature)
+        if bpy.context.collection is not None:
+            bpy.context.collection.objects.link(self.armature)
         bpy.context.view_layer.objects.active = self.armature
         self.armature["Local Space"] = self.local_space
         self.armature["Update Locals"] = self.update_locals
@@ -127,34 +128,54 @@ class FrameList(Container):
             for key, value in frame.user_data.items():
                 self.armature.pose.bones[str(bone_id)][key] = value
 
-    def load(self):
+    def fetch(self):
 
         # There always has to be a base frame
         self.frames = [Frame(Matrix.Identity(4))]
-
-        if len(bpy.data.armatures) == 0:
-            self.number_of_frames = 1
-            return
+        self.number_of_frames = 1
         
-        # If a context is given, use that
-        if bpy.context.object is not None and bpy.context.object.type == "ARMATURE":
-            armature = bpy.context.object
-        else:
-            for armature in bpy.data.objects:
-                if armature.data == bpy.data.armatures[0]:
-                    break
+        armature = get_current_armature()
+
+        if armature is None:
+            return
+
+        self.armature = armature
+        self.frames[0].user_data = {**armature}
             
         if "Local Space" in armature:
             self.local_space = armature["Local Space"]
+            del self.frames[0].user_data["Local Space"]
 
         if "Update Locals" in armature:
             self.update_locals = armature["Update Locals"]
+            del self.frames[0].user_data["Update Locals"]
 
-        for bone in armature.pose.bones:
+        if len(armature.pose.bones) == 0:
+            return
+        
+        # Find root bone. We assume that there is only one
+        for root in armature.pose.bones:
+            if root.parent is None:
+                break
+        
+        permutation = FrameList.LOCAL_MATRIX[self.local_space]
+        bone_list = [root] + root.children_recursive
+        bone_names = {bone.name for bone in bone_list if bone.name.isdigit()}
+        for bone in bone_list:
             frame = Frame()
 
             bone_name = bone.name
-            frame.bone = Bone(int(bone_name), bone.bone.matrix_local)
+
+            # Rename all bones that don't have a qualifying name
+            if not bone_name.isdigit():
+                while True:
+                    bone_name = str(randint(1000, 2999))
+                    if bone_name not in bone_names:
+                        break
+                bone.name = bone_name
+                bone_names.add(bone_name)
+
+            frame.bone = Bone(int(bone_name), bone.bone.matrix_local @ permutation.inverted())
             frame.user_data = {**bone}
 
             # If bone names are in certain number ranges for effects etc. and no tag is set, apply one automatically
@@ -163,15 +184,76 @@ class FrameList(Container):
                 frame.user_data["tag"] = bone_name
 
             if bone.parent is not None:
-                frame.parent = self.frames[1 + armature.pose.bones.find(bone.parent.name)]
+                frame.parent = self.frames[1 + bone_list.index(bone.parent)]
+            else:
+                frame.parent = self.frames[0]
             
             self.frames.append(frame)
-            self.bone_ids.append(bone.name)
 
-        permutation = FrameList.LOCAL_MATRIX[self.local_space]
+        self.bone_ids = [int(bone.name) for bone in armature.pose.bones]
+
         for frame in self.frames:
-            matrix = permutation @ frame.get_local_matrix() @ permutation.inverted()
+            matrix = frame.get_local_matrix()
             rotation = matrix.to_3x3().transposed()
             frame.matrix = Matrix.LocRotScale(matrix.translation, rotation, None)
 
-        # Reorder frames according to DFS in bones
+        self.number_of_frames = len(self.frames)
+
+    def write(self):
+
+        content = b""
+        
+        struct = Struct(Header())
+        extensions = []
+        struct.content += pack("i", self.number_of_frames)
+        for frame_index, frame in enumerate(self.frames):
+            rotation = frame.matrix.to_3x3()
+            position = frame.matrix.translation
+            for row in rotation.row:
+                struct.content += pack("fff", *row)
+            struct.content += pack("fff", *position)
+            if frame.parent is None:
+                struct.content += pack("i", -1)
+            else:
+                struct.content += pack("i", self.frames.index(frame.parent))
+            if self.update_locals:
+                flags = 0x00003
+            elif frame_index == 0:
+                flags = 0x20003
+            else:
+                flags = 0x00000
+            struct.content += pack("I", flags)
+
+            extension = Extension(Header())
+            if frame_index > 0:
+                hanimplg = HAnimPLG(Header())
+                hanimplg.id = frame.bone.id
+                hanimplg.number_of_bones = 0
+
+                if frame_index == 1:
+                    hanimplg.number_of_bones = len(self.bone_ids)
+                    hanimplg.update_modelling_matrices = self.update_locals
+                    hanimplg.update_ltms = self.update_locals
+                    hanimplg.local_space_matrices = self.local_space
+                    for bone_index, bone_id in enumerate(self.bone_ids):
+                        bone = self.armature.pose.bones[str(bone_id)]
+                        push = bone.parent is not None and bone != bone.parent.children[-1]
+                        pop = len(bone.children) == 0
+                        flags = int(push) << 1 | int(pop)
+                        hanimplg.bone_info.append((bone_id, bone_index, flags))
+
+                extension.children[HAnimPLG.ID_STAMP] = [hanimplg]
+
+            if frame.user_data:
+                userdataplg = UserDataPLG(Header())
+                userdataplg.data = {**frame.user_data}
+                extension.children[UserDataPLG.ID_STAMP] = [userdataplg]
+
+            extensions.append(extension)
+
+        content += struct.write()
+        for extension in extensions:
+            content += extension.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

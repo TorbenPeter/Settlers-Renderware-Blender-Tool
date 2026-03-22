@@ -44,22 +44,27 @@ class Clump(Container):
     def read(self, file):
         super().read(file)
         properties = self.children[Struct.ID_STAMP][0]
-        properties = unpack("iii", properties.content)
+        properties = unpack("III", properties.content)
         self.number_of_atomics = properties[0]
         self.number_of_lights = properties[1]
         self.number_of_cameras = properties[2]
-        self.frame_list = self.children[FrameList.ID_STAMP][0]
-        self.geometry_list = self.children[GeometryList.ID_STAMP][0]
+        if self.children[FrameList.ID_STAMP]:
+            self.frame_list = self.children[FrameList.ID_STAMP][0]
+        if self.children[GeometryList.ID_STAMP]:
+            self.geometry_list = self.children[GeometryList.ID_STAMP][0]
 
     def build(self, import_geometries=True, import_frames=True):
     
-        if import_frames:
+        if import_frames and self.frame_list is not None:
             self.frame_list.build()
         else:
             self.frame_list = None
+            import_frames = False
 
-        if import_geometries:
+        if import_geometries and self.geometry_list is not None:
             self.geometry_list.build(self.frame_list)
+        else:
+            import_geometries = False
 
         if not import_frames or not import_geometries:
             return
@@ -67,11 +72,20 @@ class Clump(Container):
         for atomic in self.children[Atomic.ID_STAMP]:
             atomic.build(self.frame_list, self.geometry_list)
 
-    def load(self):
+    def fetch(self):
         self.frame_list = FrameList(Header())
-        self.frame_list.load()
+        self.frame_list.fetch()
 
         self.geometry_list = GeometryList(Header())
-        self.geometry_list.load()
+        self.geometry_list.fetch()
 
         self.number_of_atomics = self.geometry_list.number_of_geometries
+
+    def write(self):
+        content = b""
+        struct = Struct(Header())
+        struct.content += pack("III", self.number_of_atomics, self.number_of_lights, self.number_of_cameras)
+        content += struct.write()
+        content += self.frame_list.write()
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

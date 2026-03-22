@@ -3,6 +3,7 @@ from .framelist import FrameList
 from ..containers.vector3d import Vector3d
 from ..containers.quat import Quat
 from ..containers.keyframe import Keyframe
+from ..util import get_current_armature
 import bpy
 from mathutils import Quaternion, Matrix, Vector
 from collections import defaultdict
@@ -53,13 +54,9 @@ class AnimAnimation(Content):
 
     def build(self, root=None, name=""):
 
-        # Get armature object - if none is selected, take the first one
-        if bpy.context.object is not None and bpy.context.object.type == 'ARMATURE':
-            armature = bpy.context.object
-        else:
-            for armature in bpy.data.objects:
-                if armature.data == bpy.data.armatures[0]:
-                    break
+        armature = get_current_armature()
+        if armature is None or len(armature.pose.bones) == 0:
+            return
 
         if root is None:
             root = armature.pose.bones[0].name
@@ -112,15 +109,11 @@ class AnimAnimation(Content):
                 keyframe_point.interpolation = "LINEAR"
 
 
-    def load(self, root=None):
+    def fetch(self, root=None):
 
-        # Get armature object - if none is selected, take the first one
-        if bpy.context.object is not None and bpy.context.object.type == 'ARMATURE':
-            armature = bpy.context.object
-        else:
-            for armature in bpy.data.objects:
-                if armature.data == bpy.data.armatures[0]:
-                    break
+        armature = get_current_armature()
+        if armature is None or len(armature.pose.bones) == 0:
+            return
 
         self.type = AnimAnimation.TYPE_NORMAL
         if "Update Locals" in armature and armature["Update Locals"]:
@@ -241,7 +234,6 @@ class AnimAnimation(Content):
             content += pack("6f", *self.compression_range["Base"], *self.compression_range["Offset"])
         header = pack("IIIIf", 256, self.type, self.number_of_frames, 0, self.duration)
         content = header + content
+        
         self.header.chunk_size = len(content)
-        content = self.header.write() + content
-
-        return content
+        return self.header.write() + content
