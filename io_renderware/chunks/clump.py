@@ -40,6 +40,7 @@ class Clump(Container):
         self.number_of_cameras = 0
         self.frame_list = None
         self.geometry_list = None
+        self.atomics = []
 
     def read(self, file):
         super().read(file)
@@ -52,6 +53,8 @@ class Clump(Container):
             self.frame_list = self.children[FrameList.ID_STAMP][0]
         if self.children[GeometryList.ID_STAMP]:
             self.geometry_list = self.children[GeometryList.ID_STAMP][0]
+        if self.children[Atomic.ID_STAMP]:
+            self.atomics = self.children[Atomic.ID_STAMP]
 
     def build(self, import_geometries=True, import_frames=True):
     
@@ -69,7 +72,7 @@ class Clump(Container):
         if not import_frames or not import_geometries:
             return
         
-        for atomic in self.children[Atomic.ID_STAMP]:
+        for atomic in self.atomics:
             atomic.build(self.frame_list, self.geometry_list)
 
     def fetch(self):
@@ -87,5 +90,6 @@ class Clump(Container):
         struct.content += pack("III", self.number_of_atomics, self.number_of_lights, self.number_of_cameras)
         content += struct.write()
         content += self.frame_list.write()
+        content += self.geometry_list.write()
         self.header.chunk_size = len(content)
         return self.header.write() + content

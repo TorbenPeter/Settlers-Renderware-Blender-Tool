@@ -1,6 +1,5 @@
 from .container import Container
 from .struct import Struct
-from .geometry import Geometry
 from .extension import Extension
 from .particlestandardplg import ParticleStandardPLG
 from struct import pack, unpack
@@ -27,7 +26,7 @@ class Atomic(Container):
     def build(self, frame_list, geometry_list):
 
         armature = frame_list.armature
-        object = geometry_list.children[Geometry.ID_STAMP][self.geometry_index].object
+        object = geometry_list.geometries[self.geometry_index].object
         parent_frame = frame_list.frames[self.frame_index]
         
         # Set object parent frame
@@ -40,7 +39,7 @@ class Atomic(Container):
         if parent_frame.bone is not None:
             bone_id = str(parent_frame.bone.id)
             constraint.subtarget = bone_id
-            if len(armature.pose.bones[bone_id].children) == 0:
+            if armature.pose.bones[bone_id].parent is not None and len(armature.pose.bones[bone_id].children) == 0:
                 armature.pose.bones[bone_id].custom_shape = object
                 armature.pose.bones[bone_id].use_custom_shape_bone_size = False
 

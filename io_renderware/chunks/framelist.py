@@ -56,7 +56,7 @@ class FrameList(Container):
             frame = self.frames[frame_id]
             for userdata in extension.children[UserDataPLG.ID_STAMP]:
                 if userdata.data:
-                    frame.user_data = {**userdata.data}
+                    frame.user_data = {**frame.user_data, **userdata.data}
 
             for hanimplg in extension.children[HAnimPLG.ID_STAMP]:
                 if hanimplg.bone_info:
@@ -85,6 +85,12 @@ class FrameList(Container):
             for frame in self.frames:
                 if frame.bone is not None and frame.bone.id == bone_id:
                     break
+            else:
+                frame = None
+
+            if frame is None:
+                continue
+
             bone_object = armature.edit_bones.new(str(frame.bone.id))
             if frame.parent is not None and frame.parent.bone is not None:
                 parent_bone = armature.edit_bones[str(frame.parent.bone.id)]
@@ -124,7 +130,12 @@ class FrameList(Container):
             for frame in self.frames:
                 if (frame.bone is not None and frame.bone.id == bone_id):
                     break
-            
+            else:
+                frame = None
+
+            if frame is None:
+                continue
+
             for key, value in frame.user_data.items():
                 self.armature.pose.bones[str(bone_id)][key] = value
 

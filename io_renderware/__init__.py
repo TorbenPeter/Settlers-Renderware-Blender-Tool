@@ -41,8 +41,6 @@ def write_anm_file(context, anim, filepath):
     file.close()
 
 def read_dff_file(context, filepath):
-    bpy.ops.outliner.orphans_purge()
-
     file = open(filepath, "rb")
     
     header = Header()
@@ -115,13 +113,16 @@ class ExportANM(bpy.types.Operator, ExportHelper):
             blend_filepath = context.blend_data.filepath
             if not blend_filepath:
                 # Get armature object - if none is selected, take the first one
+                # TODO: Get current armature
+                # TODO: Check if action exists
                 if bpy.context.object is not None and bpy.context.object.type == 'ARMATURE':
                     armature = bpy.context.object
                 else:
                     for armature in bpy.data.objects:
                         if armature.data == bpy.data.armatures[0]:
                             break
-                blend_filepath = "untitled_" + armature.animation_data.action.name
+                if armature.animation_data is not None:
+                    blend_filepath = "untitled_" + armature.animation_data.action.name
             else:
                 blend_filepath = os.path.splitext(blend_filepath)[0]
 
@@ -163,7 +164,7 @@ class ImportDFF(bpy.types.Operator, ImportHelper):
     def execute(self, context):
         Texture.TEXTURE_PATH = context.preferences.addons[__package__].preferences.texture_path
         Container.IGNORE_UNKNOWN_CHUNKS = self.ignore_unknown_chunks
-
+        bpy.ops.outliner.orphans_purge()
         clump = read_dff_file(context, self.filepath)
         clump.build(self.import_geometries, self.import_frames)
         return {"FINISHED"}
@@ -179,6 +180,7 @@ class ExportDFF(bpy.types.Operator, ExportHelper):
     filter_glob: bpy.props.StringProperty(default="*.dff", options={'HIDDEN'}, maxlen=255)
     
     def execute(self, context):
+        bpy.ops.outliner.orphans_purge()
         clump = Clump(Header())
         clump.fetch()
         write_dff_file(context, clump, self.filepath)

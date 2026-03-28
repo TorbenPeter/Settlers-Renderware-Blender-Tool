@@ -1,4 +1,3 @@
-from .vector3d import Vector3d
 from mathutils import Matrix
 
 class Bone:

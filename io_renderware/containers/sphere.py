@@ -1,4 +1,4 @@
-from .vector3d import Vector3d
+from mathutils import Vector
 from struct import pack, unpack
 
 class Sphere:
@@ -8,11 +8,10 @@ class Sphere:
 
     BYTE_SIZE = 16
 
-    def __init__(self, position : Vector3d = None, radius : float = None):
+    def __init__(self, position : Vector = None, radius : float = None):
         self.position = position
         self.radius = radius
 
     def read(self, bin):
-        self.position = Vector3d()
-        self.position.read(bin[:Vector3d.BYTE_SIZE])
-        self.radius = unpack("f", bin[Vector3d.BYTE_SIZE:])
+        self.position = Vector((unpack("3f", bin[:12])))
+        self.radius = unpack("f", bin[12:])

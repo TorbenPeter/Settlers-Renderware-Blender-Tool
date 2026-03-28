@@ -41,6 +41,7 @@ class Material(Container):
 
     def build(self, mesh):
         self.material = bpy.data.materials.new("Material{:03}".format(len(bpy.data.materials)))
+        self.material.use_backface_culling = True
 
         if "Principled BSDF" not in self.material.node_tree.nodes:
             raise Exception("Principled BSDF not included in default material. Material.build needs a patch")
