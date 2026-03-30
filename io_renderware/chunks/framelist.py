@@ -60,17 +60,36 @@ class FrameList(Container):
 
             for hanimplg in extension.children[HAnimPLG.ID_STAMP]:
                 if hanimplg.bone_info:
+                    bones = {}
+                    bone_parent_stack = []
                     for bone_info in hanimplg.bone_info:
-                        self.bone_ids.append(bone_info[0])
+                        bone_id, flags = bone_info[0], bone_info[2]
+                        bone = Bone(bone_id)
+                        if bone_parent_stack:
+                            bone.parent = bone_parent_stack[-1]
+
+                        push = flags & 0x02
+                        pop = flags & 0x01
+                        if not bone_parent_stack or push:
+                            bone_parent_stack.append(bone_id)
+                        else:
+                            bone_parent_stack[-1] = bone_id
+                        if pop:
+                            bone_parent_stack.pop()
+
+                        bones[bone_id] = bone
+                        self.bone_ids.append(bone_id)
                     self.local_space = hanimplg.local_space_matrices
                     self.update_locals = hanimplg.update_modelling_matrices and hanimplg.update_ltms
 
-                bone_id = hanimplg.id
+                bone = bones[hanimplg.id]
 
                 permutation = FrameList.LOCAL_MATRIX[self.local_space]
                 matrix = frame.get_world_matrix() @ permutation
 
-                frame.bone = Bone(bone_id, matrix)
+                bone.matrix = matrix
+
+                frame.bone = bone
 
     def build(self):
         armature = bpy.data.armatures.new(name="Armature")
@@ -92,8 +111,8 @@ class FrameList(Container):
                 continue
 
             bone_object = armature.edit_bones.new(str(frame.bone.id))
-            if frame.parent is not None and frame.parent.bone is not None:
-                parent_bone = armature.edit_bones[str(frame.parent.bone.id)]
+            if frame.bone is not None and frame.bone.parent is not None:
+                parent_bone = armature.edit_bones[str(frame.bone.parent)]
                 bone_object.parent = parent_bone
 
             bone_object.head = frame.bone.matrix.translation
@@ -186,7 +205,8 @@ class FrameList(Container):
                 bone.name = bone_name
                 bone_names.add(bone_name)
 
-            frame.bone = Bone(int(bone_name), bone.bone.matrix_local @ permutation.inverted())
+            frame.bone = Bone(int(bone_name))
+            frame.bone.matrix = bone.bone.matrix_local @ permutation.inverted()
             frame.user_data = {**bone}
 
             # If bone names are in certain number ranges for effects etc. and no tag is set, apply one automatically

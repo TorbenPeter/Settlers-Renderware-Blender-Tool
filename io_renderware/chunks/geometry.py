@@ -227,7 +227,7 @@ class Geometry(Container):
 
             if len(polygon.vertices) != 3:
                 raise Exception("All faces must be triangles. Triangulate all faces before exporting")
-            
+
             triangle = list(polygon.vertices)
 
             for loop_index, vertex_index in zip(polygon.loop_indices, range(len(triangle))):
@@ -253,7 +253,7 @@ class Geometry(Container):
                 triangle[vertex_index] = new_vertex
 
             self.triangles.append(Triangle(triangle[0], triangle[1], triangle[2], polygon.material_index))
-        
+
         for texture_set in texture_sets:
             self.texture_sets.append([uv for _, uv in sorted(texture_set.items(), key=lambda x: x[0])])
 
