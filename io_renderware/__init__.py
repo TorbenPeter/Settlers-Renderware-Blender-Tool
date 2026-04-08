@@ -9,8 +9,10 @@ from .containers.header import Header
 from .chunks import Container
 from .chunks import Texture
 
+from .util import get_current_armature
+
 bl_info = {
-    "name": "RenderWare importer/exporter for Settlers HoK/RoaE (.dff/.anm)",
+    "name": "RenderWare importer/exporter for Settlers HoK/RoaE (.dff/.anm/.uva)",
     "author": "fritz_98",
     "version": (0, 0, 1),
     # "location": "File > Import-Export > Renderware Model (.dff)",
@@ -18,7 +20,8 @@ bl_info = {
     "category": "Import-Export"
 }
 
-
+# TODO: Allow Import of multiple files at once
+# TODO: Split Animation into a base class and derive AnimAnimation and UVAnimation from that. The ID_STAMP is the same for both
 
 def read_anm_file(context, filepath):
     file = open(filepath, "rb")
@@ -62,16 +65,17 @@ def write_dff_file(context, clump, filepath):
     file.close()
 
 class ImportANM(bpy.types.Operator, ImportHelper):
-    """Import class for Renderware ANM files (Settlers HoK/RoaE)"""
-    bl_label = "Import RW ANM File"
+    """Import class for Renderware ANM and UVA files (Settlers HoK/RoaE)"""
+    bl_label = "Import RW Animatioon File"
     bl_idname = "import_animation.anm"
-    bl_description = "Import class for Renderware ANM files (Settlers HoK/RoaE)"
+    bl_description = "Import class for Renderware ANM and UVA files (Settlers HoK/RoaE)"
 
     filename_ext = ".anm"
 
-    filter_glob: bpy.props.StringProperty(default="*.anm", options={'HIDDEN'}, maxlen=255)
+    filter_glob: bpy.props.StringProperty(default="*.anm;*.uva", options={'HIDDEN'}, maxlen=255)
     
     def execute(self, context):
+        # TODO: Check first whether its a UVA file
         anim = read_anm_file(context, self.filepath)
         m = match(r".*_(?P<bone_id>\d+)\.anm", self.filepath)
         root = None
@@ -113,15 +117,10 @@ class ExportANM(bpy.types.Operator, ExportHelper):
             blend_filepath = context.blend_data.filepath
             if not blend_filepath:
                 # Get armature object - if none is selected, take the first one
-                # TODO: Get current armature
-                # TODO: Check if action exists
-                if bpy.context.object is not None and bpy.context.object.type == 'ARMATURE':
-                    armature = bpy.context.object
-                else:
-                    for armature in bpy.data.objects:
-                        if armature.data == bpy.data.armatures[0]:
-                            break
-                if armature.animation_data is not None:
+                armature = get_current_armature()
+                if armature is None:
+                    return
+                if armature.animation_data is not None and armature.animation_data.action is not None:
                     blend_filepath = "untitled_" + armature.animation_data.action.name
             else:
                 blend_filepath = os.path.splitext(blend_filepath)[0]
@@ -180,6 +179,8 @@ class ExportDFF(bpy.types.Operator, ExportHelper):
     filter_glob: bpy.props.StringProperty(default="*.dff", options={'HIDDEN'}, maxlen=255)
     
     def execute(self, context):
+        # TODO: Switch to OBJECT mode such that all changes from EDIT mode are applied
+        # bpy.ops.object.mode_set(mode="OBJECT")
         bpy.ops.outliner.orphans_purge()
         clump = Clump(Header())
         clump.fetch()
@@ -205,11 +206,11 @@ class ImportDFFPreferences(bpy.types.AddonPreferences):
 # Only needed if you want to add into a dynamic menu
 def menu_func_import(self, context):
     self.layout.operator(ImportDFF.bl_idname, text="Renderware Model (.dff)")
-    self.layout.operator(ImportANM.bl_idname, text="Renderware Animation (.anm)")
+    self.layout.operator(ImportANM.bl_idname, text="Renderware Animation (.anm./.uva)")
 
 def menu_func_export(self, context):
     self.layout.operator(ExportDFF.bl_idname, text="Renderware Model (.dff)")
-    self.layout.operator(ExportANM.bl_idname, text="Renderware Animation (.anm)")
+    self.layout.operator(ExportANM.bl_idname, text="Renderware Animation (.anm/.uva)")
 
 # Register and add to the "file selector" menu (required to use F3 search "Text Import Operator" for quick access)
 def register():

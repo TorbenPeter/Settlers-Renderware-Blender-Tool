@@ -25,6 +25,7 @@ class MorphPLG(Content):
             pointer += 20
             self.morph_targets.append(morph_target)
 
+
     def build(self, object):
 
         shape_keys = object.data.shape_keys

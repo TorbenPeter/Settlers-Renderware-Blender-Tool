@@ -9,6 +9,7 @@ from ..containers.rgba import RGBA
 from ..containers.triangle import Triangle
 from ..containers.sphere import Sphere
 from ..containers.header import Header
+from ..util import apply_vertex_remap
 from struct import pack, unpack
 from mathutils import Vector
 import bpy
@@ -37,9 +38,10 @@ class Geometry(Container):
         self.prelit_colors = []
         self.texture_sets = []
         self.triangles = []
-        self.bounding_sphere = None
+        self.bounding_spheres = []
         self.vertex_sets = []
         self.normal_sets = []
+
 
     def read(self, file):
         super().read(file)
@@ -90,8 +92,9 @@ class Geometry(Container):
         pointer += self.number_of_triangles*Triangle.BYTE_SIZE
 
         for _ in range(self.number_of_morph_targets):
-            self.bounding_sphere = Sphere()
-            self.bounding_sphere.read(properties.content[pointer:pointer+Sphere.BYTE_SIZE])
+            bounding_sphere = Sphere()
+            bounding_sphere.read(properties.content[pointer:pointer+Sphere.BYTE_SIZE])
+            self.bounding_spheres.append(bounding_sphere)
             pointer += Sphere.BYTE_SIZE
             has_vertices, has_normals = unpack("II", properties.content[pointer:pointer+8])
             has_vertices = bool(has_vertices)
@@ -123,10 +126,11 @@ class Geometry(Container):
                 if child_type == SkinPLG.ID_STAMP:
                     for child in children:
                         child.read(file=None, number_of_vertices=self.number_of_vertices)
-                # There might be cases where triangle information is only stored in the BinMeshPLG
-                if child_type == BinMeshPLG.ID_STAMP and not self.triangles:
+                # Triangle information in the BinMeshPLG is the one that counts
+                if child_type == BinMeshPLG.ID_STAMP:
                     for child in children:
                         self.triangles = child.triangles
+
 
     def build(self, armature):
         
@@ -194,17 +198,16 @@ class Geometry(Container):
                     for child in children:
                         child.build(object)
 
+
     def fetch(self, object):
 
         self.object = object
         mesh = object.data
 
-        self.number_of_morph_targets = len(mesh.shape_keys.key_blocks)
-        # Number of shape keys is only 0 if there are no vertices
-        if self.number_of_morph_targets == 0 and len(mesh.vertices) > 0:
-            self.number_of_morph_targets = 1
+        # There is always at least one morph target, even for empty geometries
+        self.number_of_morph_targets = max(1, len(mesh.shape_keys.key_blocks))
 
-        self.tristrip = True
+        self.tristrip = False
         self.has_vertices = True
         self.number_of_texture_sets = len(mesh.uv_layers)
         self.textured = self.number_of_texture_sets == 1
@@ -223,6 +226,8 @@ class Geometry(Container):
         vertex_remap = {vertex: [vertex] for vertex in range(len(mesh.vertices))}
         # Start with a dictionary since vertices don't come up in order when iterating the polygons
         texture_sets = [{} for _ in range(len(mesh.uv_layers))]
+        # Faces must be split by their respective material for the BinMeshPLG
+        face_splits = {material: [[]] for material in range(len(mesh.materials))}
         for polygon in mesh.polygons:
 
             if len(polygon.vertices) != 3:
@@ -253,61 +258,121 @@ class Geometry(Container):
                 triangle[vertex_index] = new_vertex
 
             self.triangles.append(Triangle(triangle[0], triangle[1], triangle[2], polygon.material_index))
+            face_splits[polygon.material_index][0].append((triangle[0], triangle[1], triangle[2]))
 
         for texture_set in texture_sets:
             self.texture_sets.append([uv for _, uv in sorted(texture_set.items(), key=lambda x: x[0])])
 
+        face_splits = {material_id: splits for material_id, splits in face_splits.items() if sum(len(split) for split in splits) > 0}
+
+        # material_list = MaterialList(Header())
+        # self.children[MaterialList.ID_STAMP] = [material_list]
+        # TODO:
+        # material_list.fetch(object)
+        
+        extension = Extension(Header())
+        self.children[Extension.ID_STAMP] = [extension]
+
         for modifier in object.modifiers:
             if modifier.type == "ARMATURE":
                 skin = SkinPLG(Header())
-                skin.fetch(object, vertex_remap)
+                skin.fetch(object, vertex_remap, face_splits, self.number_of_vertices)
+                extension.children[SkinPLG.ID_STAMP] = [skin]
 
+        binmesh = BinMeshPLG(Header())
+        binmesh.fetch(face_splits)
+        extension.children[BinMeshPLG.ID_STAMP] = [binmesh]
 
-        # TODO: Per morph target, get all vertices and copy those from the map
-        # TODO Bounding Sphere is min+abs(max-min)/2 as center with radius being the largest distance from any vertex. Use bound_box, change frame for shape keys
+        # First Morph Target always exists (and is easier to compute)
+        center_x = object.bound_box[0][0] + abs(object.bound_box[4][0]-object.bound_box[0][0])/2
+        center_y = object.bound_box[0][1] + abs(object.bound_box[2][1]-object.bound_box[0][1])/2
+        center_z = object.bound_box[0][2] + abs(object.bound_box[1][2]-object.bound_box[0][2])/2
+        center = Vector((center_x, center_y, center_z))
+        bounding_sphere = Sphere(position=center, radius=max((vertex.co - center).magnitude for vertex in mesh.vertices))
+        vertices = [vertex.co for vertex in mesh.vertices]
+        # NOTE: These normals are in general not identical to the ones provided in a .dff file
+        normals = [vertex.normal for vertex in mesh.vertices]
+        apply_vertex_remap(vertices, vertex_remap, self.number_of_vertices)
+        apply_vertex_remap(normals, vertex_remap, self.number_of_vertices)
+        self.bounding_spheres.append(bounding_sphere)
+        self.vertex_sets.append(vertices)
+        self.normal_sets.append(normals)
 
-        # self.number_of_triangles, self.number_of_vertices, self.number_of_morph_targets = unpack("3I", properties.content[4:16])
+        if self.number_of_morph_targets <= 1:
+            return
+        
+        for key_block in mesh.shape_keys.key_blocks[1:]:
+            min_x, max_x, min_y, max_y, min_z, max_z = float("inf"), float("-inf"), float("inf"), float("-inf"), float("inf"), float("-inf")
+            vertices = []
+            for point in key_block.points:
+                vertices.append(point.co)
+                min_x = min(min_x, point.co[0])
+                max_x = max(max_x, point.co[0])
+                min_y = min(min_y, point.co[1])
+                max_y = max(max_y, point.co[1])
+                min_z = min(min_z, point.co[2])
+                max_z = max(max_z, point.co[2])
+            center_x = min_x + abs(max_x-min_x)/2
+            center_y = min_y + abs(max_y-min_y)/2
+            center_z = min_z + abs(max_z-min_z)/2
+            center = Vector((center_x, center_y, center_z))
+            bounding_sphere = Sphere(position=center, radius=max((vertex.co - center).magnitude for vertex in mesh.vertices))
+            # This is way more inconvenient than it has to be
+            normals_list = key_block.normals_vertex_get()
+            normals = [(normals_list[i:i+3]) for i in range(0, len(normals_list), 3)]
+            apply_vertex_remap(vertices, vertex_remap, self.number_of_vertices)
+            apply_vertex_remap(normals, vertex_remap, self.number_of_vertices)
+            self.bounding_spheres.append(bounding_sphere)
+            self.vertex_sets.append(vertices)
+            self.normal_sets.append(normals)
 
-        # self.tristrip = bool(format & 0x00000001)
-        # self.positions = bool(format & 0x00000002)
-        # self.textured = bool(format & 0x00000004)
-        # self.prelit = bool(format & 0x00000008)
-        # self.has_normals = bool(format & 0x00000010)
-        # self.light = bool(format & 0x00000020)
-        # self.modulate_material_color = bool(format & 0x00000040)
-        # self.textured2 = bool(format & 0x00000080)
-        # self.native = bool(format & 0x01000000)
-        # self.number_of_texture_sets = (format & 0x00FF0000) >> 16
+        # TODO: If shape keys have animation data, create morph PLG
 
-        # assert (not self.native), "Native Geometry is not supported in this version"
-    
-        # if self.number_of_texture_sets == 0:
-        #     if self.textured2:
-        #         self.number_of_texture_sets = 2
-        #     elif self.textured:
-        #         self.number_of_texture_sets = 1
-
-        # self.object = None
-        # self.tristrip = False
-        # self.positions = False
-        # self.textured = False
-        # self.prelit = False
-        # self.light = False
-        # self.modulate_material_color = False
-        # self.textured2 = False
-        # self.native = False
-        # self.has_vertices = False
-        # self.has_normals = False
-        # self.number_of_triangles = 0
-        # self.number_of_vertices = 0
-        # self.number_of_morph_targets = 0
-        # self.number_of_texture_sets = 0
-        # self.prelit_colors = []
-        # self.texture_sets = []
-        # self.triangles = []
-        # self.bounding_sphere = None
-        # self.vertex_sets = []
-        # self.normal_sets = []
 
     def write(self):
-        return b""
+        content = b""
+        struct = Struct(Header())
+
+        format = 0
+        format |= int(self.tristrip)
+        format |= int(self.has_vertices) << 1
+        format |= int(self.textured) << 2
+        format |= int(self.prelit) << 3
+        format |= int(self.has_normals) << 4
+        format |= int(self.light) << 5
+        format |= int(self.modulate_material_color) << 6
+        format |= int(self.textured2) << 7
+        format |= int(self.native) << 24
+        format |= self.number_of_texture_sets << 16
+
+        struct.content += pack("IIII", format, self.number_of_triangles, self.number_of_vertices, self.number_of_morph_targets)
+
+        for texture_set in self.texture_sets:
+            struct.content += pack("{}f".format(2*len(texture_set)), *[coord for uv in texture_set for coord in uv])
+
+        for triangle in self.triangles:
+            struct.content += triangle.write()
+
+        for i in range(self.number_of_morph_targets):
+            bounding_sphere = self.bounding_spheres[i]
+            vertices = self.vertex_sets[i]
+            normals = self.normal_sets[i]
+            struct.content += bounding_sphere.write()
+            # has_vertices, has_normals
+            struct.content += pack("II", 1, 1)
+
+            struct.content += pack("{}f".format(3*len(vertices)), *[coord for position in vertices for coord in position])
+            struct.content += pack("{}f".format(3*len(normals)), *[coord for vector in normals for coord in vector])
+
+        content += struct.write()
+
+        if MaterialList.ID_STAMP in self.children:
+            for child in self.children[MaterialList.ID_STAMP]:
+                content += child.write()
+
+        if Extension.ID_STAMP in self.children:
+            for child in self.children[Extension.ID_STAMP]:
+                content += child.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

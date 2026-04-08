@@ -21,7 +21,7 @@ class GeometryList(Container):
             return
 
         properties = self.children[Struct.ID_STAMP][0]
-        self.number_of_geometries, = unpack("i", properties.content)
+        self.number_of_geometries, = unpack("I", properties.content)
 
     def build(self, frame_list=None):
         # In a .dff file, the armature is included in the SkinPLG as well
@@ -48,4 +48,13 @@ class GeometryList(Container):
         self.number_of_geometries = len(self.geometries)
 
     def write(self):
-        return b""
+        content = b""
+        struct = Struct(Header())
+        struct.content += pack("I", self.number_of_geometries)
+        content += struct.write()
+
+        for geometry in self.geometries:
+            content += geometry.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

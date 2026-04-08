@@ -18,3 +18,6 @@ class Triangle:
 
     def as_tuple(self):
         return (self.vertex_a, self.vertex_b, self.vertex_c)
+    
+    def write(self):
+        return pack("HHHH", self.vertex_b, self.vertex_a, self.material, self.vertex_c)

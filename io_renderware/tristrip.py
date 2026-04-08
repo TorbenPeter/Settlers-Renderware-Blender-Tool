@@ -4,6 +4,7 @@ from enum import Enum
 # Multi-Path Algorithm for Triangle Strips
 # Proceedings of Computer Graphics International Conference, CGI, July 2004
 # Basically, a greedy heuristic that distinguishes between free and connected triangles
+# TODO: Could improve those strips using Tunneling
 
 # Already sorted by priority for Node selection
 class NodeGroup(Enum):

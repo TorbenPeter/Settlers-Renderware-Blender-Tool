@@ -32,3 +32,13 @@ def get_current_armature():
             armature = None
 
     return armature
+
+# Technically, this should not require a total_length parameter
+# However, it makes it more comfortable and quick to use
+def apply_vertex_remap(vertices, remap, total_length):
+    base_length = len(vertices)
+    vertices.extend( None for _ in range((total_length-len(vertices))) )
+    for vertex in range(base_length):
+        remap_vertices = remap[vertex]
+        for remap_vertex in remap_vertices:
+            vertices[remap_vertex] = vertices[vertex]
