@@ -13,3 +13,6 @@ class RGBA:
 
     def read(self, bin):
         self.r, self.g, self.b, self.a = unpack("BBBB", bin)
+
+    def write(self):
+        return pack("BBBB", int(self.r), int(self.g), int(self.b), int(self.a))

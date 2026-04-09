@@ -5,6 +5,7 @@ from .extension import Extension
 from .materialeffectsplg import MaterialEffectsPLG
 from .uvanimationplg import UVAnimationPLG
 from ..containers.rgba import RGBA
+from ..containers.header import Header
 from struct import pack, unpack
 import bpy
 
@@ -24,6 +25,7 @@ class Material(Container):
         self.ambient = 0
         self.specular = 0
         self.diffuse = 0
+
         
     def read(self, file):
         super().read(file)
@@ -38,6 +40,7 @@ class Material(Container):
         self.is_textured = unpack("I", properties.content[12:16])
         if self.header.get_dff_version() > 0x30400:
             self.ambient, self.specular, self.diffuse = unpack("fff", properties.content[16:28])
+
 
     def build(self, mesh):
         self.material = bpy.data.materials.new("Material{:03}".format(len(bpy.data.materials)))
@@ -69,11 +72,13 @@ class Material(Container):
             separate = node_tree.nodes.new("ShaderNodeSeparateXYZ")
             combine = node_tree.nodes.new("ShaderNodeCombineXYZ")
 
-            # Range is from 0 to 8 since UV Maps scale for different texture sizes
+            # Range is from -2 to 8 since UV Maps scale for different texture sizes
             # 8 seems to be the maximum ratio at which texture sizes differ
+            # Sometimes their value is below 0, it's quite a mess
             map_range = node_tree.nodes.new("ShaderNodeMapRange")
+            map_range.inputs["From Min"].default_value = -2.0
             map_range.inputs["From Max"].default_value = 8.0
-            map_range.inputs["To Max"].default_value = 0.0
+            map_range.inputs["To Max"].default_value = -2.0
             map_range.inputs["To Min"].default_value = 8.0
 
             node_tree.links.new(separate.inputs["Vector"], input_node.outputs["UV"])
@@ -132,3 +137,94 @@ class Material(Container):
             texture_id += 1
 
         mesh.materials.append(self.material)
+
+
+    def fetch(self, material):
+        self.material = material
+
+        if "Principled BSDF" not in material.node_tree.nodes:
+            raise Exception("Principled BSDF not included in material")
+        
+        properties = self.material.node_tree.nodes["Principled BSDF"].inputs
+        self.color = RGBA(*properties["Base Color"].default_value)
+        self.diffuse = properties["Diffuse Roughness"].default_value
+        self.specular = properties["Specular IOR Level"].default_value
+        self.ambient = properties["Roughness"].default_value
+
+        self.is_textured = properties["Base Color"].is_linked
+
+        extension = Extension(Header())
+
+        self.children[Extension.ID_STAMP] = [extension]
+
+        if not self.is_textured:
+            return
+        
+        self.children[Texture.ID_STAMP] = []
+        
+        if properties["Base Color"].links[0].from_node.type == "MIX":
+            mix_node = properties["Base Color"].links[0].from_node
+
+            if mix_node.inputs["A"].is_linked:
+                texture = Texture(Header())
+                texture.fetch(mix_node.inputs['A'].links[0].from_node)
+                self.children[Texture.ID_STAMP].append(texture)
+
+            # Mask
+            if mix_node.inputs["B"].is_linked and mix_node.blend_type == "MULTIPLY":
+                self.has_mask = True
+                texture = Texture(Header())
+                texture.fetch(mix_node.inputs["B"].links[0].from_node)
+                self.children[Texture.ID_STAMP].append(texture)
+
+            # Dual Texture
+            elif mix_node.inputs["B"].is_linked and mix_node.blend_type == "MIX":
+                material_effects = MaterialEffectsPLG(Header())
+                material_effects.fetch(mix_node)
+                extension.children[MaterialEffectsPLG.ID_STAMP] = [material_effects]
+
+        elif properties["Base Color"].links[0].from_node.type == "TEX_IMAGE":
+            texture = Texture(Header())
+            texture.fetch(properties["Base Color"].links[0].from_node)
+            self.children[Texture.ID_STAMP].append(texture)
+
+        self.has_specular = properties["Specular Tint"].is_linked
+        if self.has_specular:
+            texture = Texture(Header())
+            texture.fetch(properties["Specular Tint"].links[0].from_node)
+            self.children[Texture.ID_STAMP].append(texture)
+
+        self.has_normal = properties["Normal"].is_linked
+        if self.has_normal:
+            normal_node = properties["Normal"].links[0].from_node
+            if normal_node.type == "NORMAL_MAP" and normal_node.inputs["Color"].is_linked:
+                texture = Texture(Header())
+                texture.fetch(normal_node.inputs["Color"].links[0].from_node)
+                self.children[Texture.ID_STAMP].append(texture)
+
+
+    def write(self):
+        content = b""
+
+        struct = Struct(Header())
+
+        flags = 0
+        flags |= int(self.has_mask) * Texture.TYPE_MASK
+        flags |= int(self.has_specular) * Texture.TYPE_SPECULAR
+        flags |= int(self.has_normal) * Texture.TYPE_NORMAL
+
+        struct.content += pack("I", flags)
+        struct.content += self.color.write()
+        struct.content += pack("iI3f", 0, int(self.is_textured), self.ambient, self.specular, self.diffuse)
+        content += struct.write()
+
+        if self.is_textured:
+            for child in self.children[Texture.ID_STAMP]:
+                content += child.write()
+
+        for child in self.children[Extension.ID_STAMP]:
+            content += child.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content
+

@@ -1,6 +1,7 @@
 from .container import Container
 from .struct import Struct
 from .material import Material
+from ..containers.header import Header
 from struct import pack, unpack
 
 # We are living in a Material world and I am a Material List
@@ -11,7 +12,7 @@ class MaterialList(Container):
     def __init__(self, header):
         super().__init__(header)
         self.number_of_materials = 0
-        self.materials = []
+
 
     def read(self, file):
         super().read(file)
@@ -24,6 +25,30 @@ class MaterialList(Container):
         for material in self.children[Material.ID_STAMP]:
             pass
 
+
     def build(self, mesh):
         for material in self.children[Material.ID_STAMP]:
             material.build(mesh)
+
+
+    def fetch(self, mesh):
+        self.number_of_materials = len(mesh.materials)
+        self.children[Material.ID_STAMP] = []
+        for mesh_material in mesh.materials:
+            material = Material(Header())
+            material.fetch(mesh_material)
+            self.children[Material.ID_STAMP].append(material)
+
+
+    def write(self):
+        content = b""
+        struct = Struct(Header())
+        struct.content += pack("I", self.number_of_materials)
+        struct.content += pack("{}i".format(self.number_of_materials), *[-1]*self.number_of_materials)
+        content += struct.write()
+
+        for child in self.children[Material.ID_STAMP]:
+            content += child.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

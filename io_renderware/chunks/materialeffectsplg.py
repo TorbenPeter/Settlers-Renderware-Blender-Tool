@@ -22,6 +22,7 @@ class MaterialEffectsPLG(Content):
         self.destination_blend_mode = 0
         self.textures = []
 
+
     def read(self, file, is_atomic=False):
 
         # Some Atomics contain a MaterialEffectsPLG section as well. That can be ignored for the import
@@ -58,6 +59,7 @@ class MaterialEffectsPLG(Content):
             file.read(self.header.chunk_size - pointer)
             self.textures.append(texture)
 
+
     def build(self, texture, node_tree, input, output):
 
         if len(self.textures) == 0:
@@ -82,3 +84,45 @@ class MaterialEffectsPLG(Content):
             elif self.source_blend_mode == self.destination_blend_mode == 2:
                 # Used in S5 for speculars
                 node_tree.links.new(mixer.inputs["Factor"], self.textures[0].texture_node.outputs["Color"])
+
+
+    def fetch(self, mixer):
+
+        if mixer.type != "MIX" or mixer.blend_type != "MIX":
+            return
+
+        self.type = MaterialEffectsPLG.DUAL
+
+        if not mixer.inputs["Factor"].is_linked:
+            return
+        
+        if mixer.inputs["Factor"].links[0].from_socket.type == "VALUE":
+            self.source_blend_mode = 5
+            self.destination_blend_mode = 6
+        elif mixer.inputs["Factor"].links[0].from_socket.type == "RGBA":
+            self.source_blend_mode = 2
+            self.destination_blend_mode = 2
+
+        if mixer.inputs["B"].is_linked:
+            texture = Texture(Header())
+            texture.fetch(mixer.inputs["B"].links[0].from_node)
+            self.textures.append(texture)
+
+
+    def write(self):
+        content = b""
+
+        if self.type != MaterialEffectsPLG.DUAL:
+            return content
+        
+        content += pack("I", self.type)
+        content += pack("4I", self.type, self.source_blend_mode, self.destination_blend_mode, int(len(self.textures) > 0))
+        
+        for texture in self.textures:
+            content += texture.write()
+
+        # In the original files there are always 4 bytes of 0 appended
+        content += pack("i", 0)
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

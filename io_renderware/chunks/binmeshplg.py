@@ -16,6 +16,7 @@ class BinMeshPLG(Content):
         self.material_ids = []
         self.tristrips = []
 
+
     # This is only read as a fallback for cases in which no faces are stored in the Geometry Struct
     def read(self, file):
         super().read(file)
@@ -26,7 +27,7 @@ class BinMeshPLG(Content):
         pointer = 12
 
         if self.is_triangle_strip:
-            for i in range(self.number_of_splits):
+            for _ in range(self.number_of_splits):
                 number_of_indices, material = unpack("II", self.content[pointer:pointer+8])
                 pointer += 8
                 vertex_array = unpack("{}I".format(number_of_indices), self.content[pointer:pointer+number_of_indices*4])
@@ -39,7 +40,6 @@ class BinMeshPLG(Content):
                         a, b, c = vertex_array[vertex_index:vertex_index+3]
                     if a != b and b != c and c != a:
                         self.triangles.append(Triangle(a, b, c, material))
-                        # self.triangles.append(Triangle(a, b, c, i))
         else:
             for _ in range(self.number_of_splits):
                 number_of_indices, material = unpack("II", self.content[pointer:pointer+8])
@@ -61,6 +61,7 @@ class BinMeshPLG(Content):
                 self.number_of_indices += len(tristrip)
                 self.number_of_splits += 1
 
+
     def write(self):
         content = pack("III", 1, self.number_of_splits, self.number_of_indices)
 
@@ -68,6 +69,6 @@ class BinMeshPLG(Content):
             tristrip = self.tristrips[i]
             content += pack("II", len(tristrip), self.material_ids[i])
             content += pack("{}I".format(len(tristrip)), *tristrip)
-        
+
         self.header.chunk_size = len(content)
         return self.header.write() + content

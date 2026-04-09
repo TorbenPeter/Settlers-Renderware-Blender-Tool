@@ -207,7 +207,7 @@ class Geometry(Container):
         # There is always at least one morph target, even for empty geometries
         self.number_of_morph_targets = max(1, len(mesh.shape_keys.key_blocks))
 
-        self.tristrip = False
+        self.tristrip = True
         self.has_vertices = True
         self.number_of_texture_sets = len(mesh.uv_layers)
         self.textured = self.number_of_texture_sets == 1
@@ -228,6 +228,8 @@ class Geometry(Container):
         texture_sets = [{} for _ in range(len(mesh.uv_layers))]
         # Faces must be split by their respective material for the BinMeshPLG
         face_splits = {material: [[]] for material in range(len(mesh.materials))}
+        # TODO: There appear to be duplicate triangles in some meshes that later on crash the tristrip generation
+        # Might have to handle that at some point
         for polygon in mesh.polygons:
 
             if len(polygon.vertices) != 3:
@@ -265,10 +267,9 @@ class Geometry(Container):
 
         face_splits = {material_id: splits for material_id, splits in face_splits.items() if sum(len(split) for split in splits) > 0}
 
-        # material_list = MaterialList(Header())
-        # self.children[MaterialList.ID_STAMP] = [material_list]
-        # TODO:
-        # material_list.fetch(object)
+        material_list = MaterialList(Header())
+        self.children[MaterialList.ID_STAMP] = [material_list]
+        material_list.fetch(object.data)
         
         extension = Extension(Header())
         self.children[Extension.ID_STAMP] = [extension]
