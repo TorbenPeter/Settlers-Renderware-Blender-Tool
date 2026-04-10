@@ -177,7 +177,7 @@ class SkinPLG(Content):
         if armature is None:
             return
         
-        self.number_of_bones = len(armature.pose.bones)
+        self.number_of_bones = len([bone for bone in armature.pose.bones if not bone.hide])
 
         self.vertex_bone_map = [[] for _ in object.data.vertices]
         self.vertex_weights = [[] for _ in object.data.vertices]
@@ -186,13 +186,14 @@ class SkinPLG(Content):
             for group in vertex.groups:
 
                 bone_name = object.vertex_groups[group.group].name
-                bone_id = armature.pose.bones.find(bone_name)
-                self.vertex_bone_map[vertex.index].append(bone_id)
-                self.vertex_weights[vertex.index].append(group.weight)
-                self.max_number_of_vertex_weights = max(self.max_number_of_vertex_weights, len(self.vertex_bone_map[vertex.index]))
+                if bone_name in armature.pose.bones and not armature.pose.bones[bone_name].hide:
+                    bone_id = armature.pose.bones.find(bone_name)
+                    self.vertex_bone_map[vertex.index].append(bone_id)
+                    self.vertex_weights[vertex.index].append(group.weight)
+                    self.max_number_of_vertex_weights = max(self.max_number_of_vertex_weights, len(self.vertex_bone_map[vertex.index]))
 
-                if bone_id not in self.used_bones:
-                    self.used_bones.append(bone_id)
+                    if bone_id not in self.used_bones:
+                        self.used_bones.append(bone_id)
 
         self.number_of_used_bones = len(self.used_bones)
 

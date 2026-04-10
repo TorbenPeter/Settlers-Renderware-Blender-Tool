@@ -205,7 +205,9 @@ class Geometry(Container):
         mesh = object.data
 
         # There is always at least one morph target, even for empty geometries
-        self.number_of_morph_targets = max(1, len(mesh.shape_keys.key_blocks))
+        self.number_of_morph_targets = 1
+        if mesh.shape_keys is not None:
+            self.number_of_morph_targets = max(1, len(mesh.shape_keys.key_blocks))
 
         self.tristrip = len(mesh.vertices) > 0
         self.has_vertices = len(mesh.vertices) > 0

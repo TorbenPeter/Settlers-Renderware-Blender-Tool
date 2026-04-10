@@ -26,6 +26,7 @@ class AnimAnimation(Content):
         self.keyframes = []
         self.compression_range = {}
 
+
     def read(self, file):
         super().read(file)
         const, self.type, self.number_of_frames, flags, self.duration = unpack("IIIIf", self.content[:20])
@@ -51,6 +52,7 @@ class AnimAnimation(Content):
                 bone_index = bone_counter
                 bone_counter += 1
             keyframe.bone_index = bone_index
+
 
     def build(self, root=None, name=""):
 
@@ -126,7 +128,7 @@ class AnimAnimation(Content):
             else:
                 root = armature.pose.bones[0].name
 
-        bones = {child.name for child in armature.pose.bones[root].children_recursive}
+        bones = {child.name for child in armature.pose.bones[root].children_recursive if not child.hide}
         bones.add(root)
         
         fcurves = armature.animation_data.action.layers[0].strips[0].channelbags[0].fcurves
@@ -220,6 +222,7 @@ class AnimAnimation(Content):
             return True
         else:
             return False
+
 
     def write(self):
 

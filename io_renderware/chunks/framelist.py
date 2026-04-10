@@ -189,7 +189,7 @@ class FrameList(Container):
                 break
         
         permutation = FrameList.LOCAL_MATRIX[self.local_space]
-        bone_list = [root] + root.children_recursive
+        bone_list = [root] + [child for child in root.children_recursive if not child.hide]
         bone_names = {bone.name for bone in bone_list if bone.name.isdigit()}
         for bone in bone_list:
             frame = Frame()
@@ -221,7 +221,7 @@ class FrameList(Container):
             
             self.frames.append(frame)
 
-        self.bone_ids = [int(bone.name) for bone in armature.pose.bones]
+        self.bone_ids = [int(bone.name) for bone in armature.pose.bones if not bone.hide]
 
         for frame in self.frames:
             matrix = frame.get_local_matrix()
