@@ -17,7 +17,7 @@ def get_current_armature():
     elif bpy.context.collection is not None:
         # If not, search the colletion in the current context
         for armature in bpy.context.collection.objects:
-            if armature.type == "ARMATURE":
+            if not armature.hide_get() and armature.type == "ARMATURE":
                 break
         else:
             armature = None
@@ -26,7 +26,7 @@ def get_current_armature():
     # TODO: Technically, this could be undesired behaviour. Up for debate
     if armature is None:
         for armature in bpy.data.objects:
-            if armature.data == bpy.data.armatures[0]:
+            if not armature.hide_get() and armature.type == "ARMATURE":
                 break
         else:
             armature = None

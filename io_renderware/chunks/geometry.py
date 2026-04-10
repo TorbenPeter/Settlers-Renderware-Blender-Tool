@@ -207,14 +207,14 @@ class Geometry(Container):
         # There is always at least one morph target, even for empty geometries
         self.number_of_morph_targets = max(1, len(mesh.shape_keys.key_blocks))
 
-        self.tristrip = True
-        self.has_vertices = True
+        self.tristrip = len(mesh.vertices) > 0
+        self.has_vertices = len(mesh.vertices) > 0
         self.number_of_texture_sets = len(mesh.uv_layers)
         self.textured = self.number_of_texture_sets == 1
         self.textured2 = self.number_of_texture_sets > 1
         self.prelit = False
-        self.has_normals = True
-        self.light = True
+        self.has_normals = len(mesh.vertices) > 0
+        self.light = len(mesh.vertices) > 0
         self.modulate_material_color = False
         self.native = False
 
@@ -289,7 +289,10 @@ class Geometry(Container):
         center_y = object.bound_box[0][1] + abs(object.bound_box[2][1]-object.bound_box[0][1])/2
         center_z = object.bound_box[0][2] + abs(object.bound_box[1][2]-object.bound_box[0][2])/2
         center = Vector((center_x, center_y, center_z))
-        bounding_sphere = Sphere(position=center, radius=max((vertex.co - center).magnitude for vertex in mesh.vertices))
+        radius = 0
+        if len(mesh.vertices) > 0:
+            radius = max((vertex.co - center).magnitude for vertex in mesh.vertices)
+        bounding_sphere = Sphere(position=center, radius=radius)
         vertices = [vertex.co for vertex in mesh.vertices]
         # NOTE: These normals are in general not identical to the ones provided in a .dff file
         normals = [vertex.normal for vertex in mesh.vertices]
@@ -359,8 +362,10 @@ class Geometry(Container):
             vertices = self.vertex_sets[i]
             normals = self.normal_sets[i]
             struct.content += bounding_sphere.write()
-            # has_vertices, has_normals
-            struct.content += pack("II", 1, 1)
+
+            has_vertices = len(vertices) > 0
+            has_normals = len(normals) > 0
+            struct.content += pack("II", int(has_vertices), int(has_normals))
 
             struct.content += pack("{}f".format(3*len(vertices)), *[coord for position in vertices for coord in position])
             struct.content += pack("{}f".format(3*len(normals)), *[coord for vector in normals for coord in vector])

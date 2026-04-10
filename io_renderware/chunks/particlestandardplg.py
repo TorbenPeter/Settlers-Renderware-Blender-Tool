@@ -7,8 +7,8 @@ class ParticleStandardPLG(Content):
     def __init__(self, header):
         super().__init__(header)
 
-    def read(self, file):
-        super().read(file)
-
     def build(self, object):
         object["Particles"] = self.content
+
+    def fetch(self, object):
+        self.content = object["Particles"]

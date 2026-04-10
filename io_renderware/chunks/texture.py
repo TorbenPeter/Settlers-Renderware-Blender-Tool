@@ -37,7 +37,6 @@ class Texture(Container):
         self.texture_name = self.children[String.ID_STAMP][0].content
         # Technically, the second string contains an RGB value
         # That one seems to be uninportant though
-        print(self.filtering, self.u_adressing, self.v_adressing, self.use_mip_levels)
 
 
     def build(self, node_tree, input, output):

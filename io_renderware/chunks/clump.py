@@ -3,9 +3,9 @@ from .framelist import FrameList
 from .geometrylist import GeometryList
 from .atomic import Atomic
 from .struct import Struct
+from .extension import Extension
 from ..containers.header import Header
 from struct import pack, unpack
-import bpy
 
 class Clump(Container):
 
@@ -56,6 +56,7 @@ class Clump(Container):
         if self.children[Atomic.ID_STAMP]:
             self.atomics = self.children[Atomic.ID_STAMP]
 
+
     def build(self, import_geometries=True, import_frames=True):
     
         if import_frames and self.frame_list is not None:
@@ -71,9 +72,10 @@ class Clump(Container):
 
         if not import_frames or not import_geometries:
             return
-        
+
         for atomic in self.atomics:
             atomic.build(self.frame_list, self.geometry_list)
+
 
     def fetch(self):
         self.frame_list = FrameList(Header())
@@ -82,7 +84,15 @@ class Clump(Container):
         self.geometry_list = GeometryList(Header())
         self.geometry_list.fetch()
 
-        self.number_of_atomics = self.geometry_list.number_of_geometries
+        for index, geometry in enumerate(self.geometry_list.geometries):
+            atomic = Atomic(Header())
+            atomic.fetch(geometry, self.frame_list, index)
+            self.atomics.append(atomic)
+
+        self.number_of_atomics = len(self.atomics)
+
+        self.children[Extension.ID_STAMP] = [Extension(Header())]
+
 
     def write(self):
         content = b""
@@ -91,5 +101,9 @@ class Clump(Container):
         content += struct.write()
         content += self.frame_list.write()
         content += self.geometry_list.write()
+        for atomic in self.atomics:
+            content += atomic.write()
+        for extension in self.children[Extension.ID_STAMP]:
+            content += extension.write()
         self.header.chunk_size = len(content)
         return self.header.write() + content
