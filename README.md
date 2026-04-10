@@ -22,6 +22,7 @@ Blender Addon to edit Renderware Model and Animation Files. Mainly tailored to S
 - The order of UV Maps attached to a mesh is essential to the correct assignment to multiple textures
 - In the Shader Editor, the name of an Image Texture Node determines the exported texture name. Texture images themselves are not exported
 - Most buildings have static frames with a specific naming scheme (e.g. 300+ for fire effects, 600+ for animations, etc). Such bones require a "tag" custom property to properly function ingame. I recommend aligning those static frames along the Y axis
+- Most building animations run on a subtree of the armature. To export an animation for such a subtree, the name of the bone must be given in the filename (e.g. "sawmill_work_601.anm" for an animation with bones in the subtree starting at bone "601"). The root bone must be tagged
 - Units from RoaE are often blue upon import. This is due to the masks that Blue Byte uses for specular effects as well as player colors. You can edit the shader node tree to temporarily disable them, however, they must be reenabled for a valid export
 - For UV animations, the name of the animation must be attached to the respective object as a custom property
 - Unit animations usually consist of numerous keyframes. Those are most likely baked and not created by hand. Try to find actual key points and delete the rest for easier editing
