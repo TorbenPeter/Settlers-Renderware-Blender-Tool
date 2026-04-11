@@ -140,6 +140,11 @@ class Material(Container):
 
         self.children[Extension.ID_STAMP] = [extension]
 
+        if "UV Animations" in material:
+            uv_animations = UVAnimationPLG(Header())
+            uv_animations.fetch(material)
+            extension.children[UVAnimationPLG.ID_STAMP] = [uv_animations]
+
         if not self.is_textured:
             return
         

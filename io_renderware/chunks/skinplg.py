@@ -26,6 +26,7 @@ class SkinPLG(Content):
         self.bone_remap_indices = ()
         self.bone_groups = []
         self.bone_remaps = []
+
         
     def read(self, file, number_of_vertices = None):
 

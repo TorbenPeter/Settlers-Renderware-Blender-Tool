@@ -1,5 +1,4 @@
-from .vector3d import Vector3d
-from .quat import Quat
+from mathutils import Vector, Quaternion
 from struct import pack, unpack
 from math import log2, floor
 
@@ -30,13 +29,16 @@ class Keyframe:
         x = abs(x)
         if x == 0:
             return sign*0
-        exponent = int(floor(log2(x)))
-        x = (x / 2**exponent) - 1
+
+        exponent = 0
+        while x < 1.0 and exponent > -15:
+            x *= 2.0
+            exponent -= 1
         exponent = (exponent + 15) & 0xf
-        mantissa = int(x * 0x800) & 0x07ff
+        mantissa = int((x - 1) * 0x800) & 0x07ff
         return (sign << 15) ^ (exponent << 11) ^ mantissa
 
-    def __init__(self, bone_index : int = 0, time : float = 0.0, location : Vector3d = None, rotation : Quat = None, prev_keyframe_index : int = 0):
+    def __init__(self, bone_index : int = 0, time : float = 0.0, location : Vector = None, rotation : Quaternion = None, prev_keyframe_index : int = 0):
         self.bone_index = bone_index
         self.time = time
         self.location = location
@@ -49,13 +51,14 @@ class Keyframe:
         return self.bone_index == other.bone_index and self.location == other.location and self.rotation == other.rotation
 
     def read(self, bin, compressed=False):
-        self.location = Vector3d()
-        self.rotation = Quat()
         if compressed:
-            self.time, self.rotation.x, self.rotation.y, self.rotation.z, self.rotation.w, self.location.x, self.location.y, self.location.z, self.prev_keyframe_index = unpack("<f7HI", bin)
-            self.rotation.x, self.rotation.y, self.rotation.z, self.rotation.w, self.location.x, self.location.y, self.location.z = Keyframe.uncompress(self.rotation.x), Keyframe.uncompress(self.rotation.y), Keyframe.uncompress(self.rotation.z), Keyframe.uncompress(self.rotation.w), Keyframe.uncompress(self.location.x), Keyframe.uncompress(self.location.y), Keyframe.uncompress(self.location.z)
+            self.time, rx, ry, rz, rw, x, y, z, self.prev_keyframe_index = unpack("<f7HI", bin)
+            self.rotation = Quaternion((Keyframe.uncompress(rw), Keyframe.uncompress(rx), Keyframe.uncompress(ry), Keyframe.uncompress(rz)))
+            self.location = Vector((Keyframe.uncompress(x), Keyframe.uncompress(y), Keyframe.uncompress(z)))
             self.prev_keyframe_index //= (Keyframe.KEYFRAME_SIZE_COMPRESSED + 2)
         else:
+            self.location = Vector()
+            self.rotation = Quaternion()
             self.time, self.rotation.x, self.rotation.y, self.rotation.z, self.rotation.w, self.location.x, self.location.y, self.location.z, self.prev_keyframe_index = unpack("8fI", bin)
             self.prev_keyframe_index //= Keyframe.KEYFRAME_SIZE_NORMAL
 
@@ -74,16 +77,13 @@ class Keyframe:
                         self.location.z,
                         prev_keyframe_index)
         else:
-            self.location.x = (self.location.x - compression_range["Base"][0])/compression_range["Offset"][0]
-            self.location.y = (self.location.y - compression_range["Base"][1])/compression_range["Offset"][1]
-            self.location.z = (self.location.z - compression_range["Base"][2])/compression_range["Offset"][2]
             return pack("<f7HI",
                         self.time,
                         Keyframe.compress(self.rotation.x),
                         Keyframe.compress(self.rotation.y),
                         Keyframe.compress(self.rotation.z),
                         Keyframe.compress(self.rotation.w),
-                        Keyframe.compress(self.location.x),
-                        Keyframe.compress(self.location.y),
-                        Keyframe.compress(self.location.z),
+                        Keyframe.compress((self.location.x - compression_range["Base"].x)/compression_range["Offset"].x),
+                        Keyframe.compress((self.location.y - compression_range["Base"].y)/compression_range["Offset"].y),
+                        Keyframe.compress((self.location.z - compression_range["Base"].z)/compression_range["Offset"].z),
                         prev_keyframe_index)

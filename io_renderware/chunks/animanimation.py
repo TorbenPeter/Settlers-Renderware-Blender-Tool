@@ -1,7 +1,5 @@
-from .content import Content
+from .animation import Animation
 from .framelist import FrameList
-from ..containers.vector3d import Vector3d
-from ..containers.quat import Quat
 from ..containers.keyframe import Keyframe
 from ..util import get_current_armature
 import bpy
@@ -9,14 +7,11 @@ from mathutils import Quaternion, Matrix, Vector
 from collections import defaultdict
 from struct import pack, unpack
     
-class AnimAnimation(Content):
+class AnimAnimation(Animation):
 
     TYPE_NORMAL = 1
     TYPE_COMPRESSED = 2
-    TYPE_UVANIM_LINEAR = 448
-    TYPE_UVANIM_PARAM = 449
     DEFAULT_FPS = 30
-    ID_STAMP = 0x0000001B
 
     def __init__(self, header):
         super().__init__(header)
@@ -30,6 +25,9 @@ class AnimAnimation(Content):
     def read(self, file):
         super().read(file)
         const, self.type, self.number_of_frames, flags, self.duration = unpack("IIIIf", self.content[:20])
+
+        if self.type != AnimAnimation.TYPE_NORMAL and self.type != AnimAnimation.TYPE_COMPRESSED:
+            return
 
         pointer = 20
         keyframe_size = Keyframe.KEYFRAME_SIZE_COMPRESSED if (self.type == AnimAnimation.TYPE_COMPRESSED) else Keyframe.KEYFRAME_SIZE_NORMAL
@@ -87,8 +85,8 @@ class AnimAnimation(Content):
             pose_bone = armature.pose.bones[bone_index]
             rest_bone = pose_bone.bone
 
-            location = Vector(keyframe.location.as_tuple())
-            rotation = Quaternion(keyframe.rotation.as_tuple()).to_matrix().to_4x4()
+            location = keyframe.location
+            rotation = keyframe.rotation.to_matrix().to_4x4()
 
             if self.type == AnimAnimation.TYPE_COMPRESSED:
                 location = self.compression_range["Base"] + location * self.compression_range["Offset"]
@@ -201,7 +199,7 @@ class AnimAnimation(Content):
 
             location = parent_rotation.inverted() @ (rest_bone.matrix_local @ location)
 
-            self.keyframes.append(Keyframe(bone_name, time, Vector3d(*location), Quat(rotation[1], rotation[2], rotation[3], rotation[0]), prev_keyframes[bone_name]))
+            self.keyframes.append(Keyframe(bone_name, time, location, rotation, prev_keyframes[bone_name]))
             prev_keyframes[bone_name] = len(self.keyframes) - 1
 
             if self.type == AnimAnimation.TYPE_COMPRESSED:

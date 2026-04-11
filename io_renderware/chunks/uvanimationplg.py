@@ -1,5 +1,6 @@
 from .container import Container
 from .struct import Struct
+from ..containers.header import Header
 from struct import pack, unpack
 
 class UVAnimationPLG(Container):
@@ -23,3 +24,19 @@ class UVAnimationPLG(Container):
 
     def build(self, material):
         material["UV Animations"] = tuple(self.uv_animations)
+
+    def fetch(self, material):
+        if "UV Animations" in material:
+            self.uv_animations = tuple(material["UV Animations"])
+
+    def write(self):
+        content = b""
+        struct = Struct(Header())
+        struct.content += pack("I", len(self.uv_animations))
+        for uv_animation in self.uv_animations:
+            name = uv_animation + "\0"*(32 - len(uv_animation))
+            struct.content += name.encode("utf-8")
+        content += struct.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content
