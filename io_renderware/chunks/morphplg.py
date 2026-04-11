@@ -15,6 +15,7 @@ class MorphPLG(Content):
         self.number_of_morph_targets = 0
         self.morph_targets = []
 
+
     def read(self, file):
         super().read(file)
         self.number_of_morph_targets, = unpack("I", self.content[:4])
@@ -52,3 +53,43 @@ class MorphPLG(Content):
         for fcurve in action.layers[0].strips[0].channelbags[0].fcurves:
             for keyframe_point in fcurve.keyframe_points:
                 keyframe_point.interpolation = "LINEAR"
+
+
+    def fetch(self, object):
+        mesh = object.data
+        if mesh.shape_keys.animation_data is None or mesh.shape_keys.animation_data.action is None:
+            return
+        
+        scene = bpy.data.scenes[0]
+        fps = scene.render.fps
+        if bpy.context.scene is not None:
+            scene = bpy.context.scene
+        action = mesh.shape_keys.animation_data.action
+        # Only 1 fcurve required for morphing
+        fcurve = action.layers[0].strips[0].channelbags[0].fcurves[0]
+        time = scene.frame_start
+        target = 0
+        for keyframe_point in fcurve.keyframe_points:
+            morph_target = MorphTarget()
+            morph_target.delta_time = (keyframe_point.co[0] - time)/fps
+            time = keyframe_point.co[0]
+            morph_target.start = target
+            # NOTE: This is a little hacky, but let's be honest, who's making morph animations in here?
+            target = int(keyframe_point.co[1] // MorphPLG.DEFAULT_MORPH_DURATION)
+            morph_target.end = target
+            morph_target.next = target
+            if morph_target.start == morph_target.end:
+                continue
+            self.morph_targets.append(morph_target)
+
+        self.number_of_morph_targets = len(self.morph_targets)
+
+
+    def write(self):
+        content = b""
+        content += pack("I", self.number_of_morph_targets)
+        for morph_target in self.morph_targets:
+            content += morph_target.write()
+
+        self.header.chunk_size = len(content)
+        return self.header.write() + content

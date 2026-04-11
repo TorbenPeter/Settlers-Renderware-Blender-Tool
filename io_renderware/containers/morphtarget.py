@@ -12,4 +12,7 @@ class MorphTarget:
         self.next = 0
 
     def read(self, bin):
-        const, self.start, self.end, self.delta_time, self.next = unpack("iiifi", bin)
+        zero, self.start, self.end, self.delta_time, self.next = unpack("iiifi", bin)
+
+    def write(self):
+        return pack("iiifi", 0, self.start, self.end, self.delta_time, self.next)

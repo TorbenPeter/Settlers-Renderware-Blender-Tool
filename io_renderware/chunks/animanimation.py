@@ -68,11 +68,13 @@ class AnimAnimation(Content):
             armature.animation_data_create()
         armature.animation_data.action = action
 
-        bone_order = [root] + [child.name for child in armature.pose.bones[root].children_recursive]
+        bone_order = [root] + [child.name for child in armature.pose.bones[root].children_recursive if not child.hide]
         bone_order = sorted(bone_order, key = lambda x: armature.pose.bones.find(x))
 
         fps = AnimAnimation.DEFAULT_FPS
         scene = bpy.data.scenes[0]
+        if bpy.context.scene is not None:
+            scene = bpy.context.scene
         scene.render.fps = fps
 
         permutation = Matrix.Identity(4)
@@ -176,6 +178,8 @@ class AnimAnimation(Content):
 
         prev_keyframes = {bone: -1 for bone in bones}
         scene = bpy.data.scenes[0]
+        if bpy.context.scene is not None:
+            scene = bpy.context.scene
         for keyframe in keyframes:
             bone_name = keyframe[0]
             pose_bone = armature.pose.bones[bone_name]

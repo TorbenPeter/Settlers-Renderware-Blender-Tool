@@ -14,7 +14,7 @@ from .util import get_current_armature
 bl_info = {
     "name": "RenderWare importer/exporter for Settlers HoK/RoaE (.dff/.anm/.uva)",
     "author": "fritz_98",
-    "version": (0, 0, 1),
+    "version": (0, 1, 0),
     # "location": "File > Import-Export > Renderware Model (.dff)",
     "description": "RenderWare model and animation importer/exporter for Settlers HoK/RoaE",
     "category": "Import-Export"

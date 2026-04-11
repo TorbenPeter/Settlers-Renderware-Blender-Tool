@@ -16,6 +16,10 @@ import bpy
 
 class Geometry(Container):
 
+    # UV Map V-coordinate is flipped in this range
+    UV_MIN = -16
+    UV_MAX = 16
+
     ID_STAMP = 0x0000000F
 
     def __init__(self, header):
@@ -151,6 +155,8 @@ class Geometry(Container):
             for triangle in mesh.polygons:
                 for vert_idx, loop_idx in zip(triangle.vertices, triangle.loop_indices):
                     uv.data[loop_idx].uv = texture_set[vert_idx]
+                    # Flip V-coordinate, because Renderware is quirky like that
+                    uv.data[loop_idx].uv[1] = Geometry.UV_MAX - uv.data[loop_idx].uv[1] + Geometry.UV_MIN
 
         # Create Materials and Textures
         if MaterialList.ID_STAMP in self.children:
@@ -265,7 +271,7 @@ class Geometry(Container):
             face_splits[polygon.material_index][0].append((triangle[0], triangle[1], triangle[2]))
 
         for texture_set in texture_sets:
-            self.texture_sets.append([uv for _, uv in sorted(texture_set.items(), key=lambda x: x[0])])
+            self.texture_sets.append([Vector((uv[0], Geometry.UV_MIN - uv[1] + Geometry.UV_MAX)) for _, uv in sorted(texture_set.items(), key=lambda x: x[0])])
 
         face_splits = {material_id: splits for material_id, splits in face_splits.items() if sum(len(split) for split in splits) > 0}
 
@@ -332,7 +338,11 @@ class Geometry(Container):
             self.vertex_sets.append(vertices)
             self.normal_sets.append(normals)
 
-        # TODO: If shape keys have animation data, create morph PLG
+        # If shape keys have animation data, create morph PLG
+        if mesh.shape_keys.animation_data is not None:
+            morph = MorphPLG(Header())
+            morph.fetch(object)
+            extension.children[MorphPLG.ID_STAMP] = [morph]
 
 
     def write(self):

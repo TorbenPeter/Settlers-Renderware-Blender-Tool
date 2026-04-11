@@ -230,6 +230,7 @@ class FrameList(Container):
 
         self.number_of_frames = len(self.frames)
 
+
     def write(self):
 
         content = b""

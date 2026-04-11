@@ -68,24 +68,7 @@ class Material(Container):
         for uv_layer in mesh.uv_layers:
             input_node = node_tree.nodes.new("ShaderNodeUVMap")
             input_node.uv_map = uv_layer.name
-
-            separate = node_tree.nodes.new("ShaderNodeSeparateXYZ")
-            combine = node_tree.nodes.new("ShaderNodeCombineXYZ")
-
-            # Range is from -2 to 8 since UV Maps scale for different texture sizes
-            # 8 seems to be the maximum ratio at which texture sizes differ
-            # Sometimes their value is below 0, it's quite a mess
-            map_range = node_tree.nodes.new("ShaderNodeMapRange")
-            map_range.inputs["From Min"].default_value = -2.0
-            map_range.inputs["From Max"].default_value = 8.0
-            map_range.inputs["To Max"].default_value = -2.0
-            map_range.inputs["To Min"].default_value = 8.0
-
-            node_tree.links.new(separate.inputs["Vector"], input_node.outputs["UV"])
-            node_tree.links.new(combine.inputs["X"], separate.outputs["X"])
-            node_tree.links.new(map_range.inputs["Value"], separate.outputs["Y"])
-            node_tree.links.new(combine.inputs["Y"], map_range.outputs["Result"])
-            uv_sources.append(combine.outputs["Vector"])
+            uv_sources.append(input_node.outputs["UV"])
 
         textures[0].build(node_tree, uv_sources[0], properties["Base Color"])
 
