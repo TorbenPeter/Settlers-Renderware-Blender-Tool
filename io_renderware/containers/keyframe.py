@@ -1,6 +1,5 @@
 from mathutils import Vector, Quaternion
 from struct import pack, unpack
-from math import log2, floor
 
 class Keyframe:
     """

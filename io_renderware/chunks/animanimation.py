@@ -1,17 +1,22 @@
-from .animation import Animation
+from .content import Content
 from .framelist import FrameList
 from ..containers.keyframe import Keyframe
+from ..containers.uvkeyframe import UVKeyframe
 from ..util import get_current_armature
 import bpy
 from mathutils import Quaternion, Matrix, Vector
 from collections import defaultdict
 from struct import pack, unpack
     
-class AnimAnimation(Animation):
+class AnimAnimation(Content):
 
     TYPE_NORMAL = 1
     TYPE_COMPRESSED = 2
+    TYPE_LINEAR = 448
+    TYPE_PARAM = 449
     DEFAULT_FPS = 30
+
+    ID_STAMP = 0x0000001B
 
     def __init__(self, header):
         super().__init__(header)
@@ -20,13 +25,22 @@ class AnimAnimation(Animation):
         self.duration = 0
         self.keyframes = []
         self.compression_range = {}
+        self.name = ""
+        self.node_uv_channels = []
+
+    
+    def is_uv_anim(self):
+        return self.type == AnimAnimation.TYPE_LINEAR or self.type == AnimAnimation.TYPE_PARAM
 
 
     def read(self, file):
         super().read(file)
+
         const, self.type, self.number_of_frames, flags, self.duration = unpack("IIIIf", self.content[:20])
 
-        if self.type != AnimAnimation.TYPE_NORMAL and self.type != AnimAnimation.TYPE_COMPRESSED:
+        # With ugly definitions come ugly implementations
+        if self.is_uv_anim():
+            self.read_uv()
             return
 
         pointer = 20
@@ -51,8 +65,40 @@ class AnimAnimation(Animation):
                 bone_counter += 1
             keyframe.bone_index = bone_index
 
+    def read_uv(self):
+
+        # TODO
+        if self.type == AnimAnimation.TYPE_LINEAR:
+            Exception("Linear UV Animations are not implemented at this time")
+
+        pointer = 24
+        self.name = self.content[pointer:pointer+32].decode("latin_1").strip("\0")
+        pointer += 32
+        self.node_uv_channels = list(unpack("8i", self.content[pointer:pointer+32]))
+        pointer += 32
+
+        for _ in range(self.number_of_frames):
+            keyframe = UVKeyframe(self.type == AnimAnimation.TYPE_LINEAR)
+            keyframe.read(self.content[pointer:pointer+UVKeyframe.KEYFRAME_SIZE])
+            self.keyframes.append(keyframe)
+            pointer += UVKeyframe.KEYFRAME_SIZE
+
+        node_counter = 0
+        for keyframe in self.keyframes:
+            prev_keyframe = keyframe.prev_keyframe_index
+            if 0 <= prev_keyframe < len(self.keyframes):
+                node_index = self.keyframes[prev_keyframe].node_index
+            else:
+                node_index = node_counter
+                node_counter += 1
+            keyframe.node_index = node_index
+
 
     def build(self, root=None, name=""):
+
+        if self.is_uv_anim():
+            self.build_uv()
+            return
 
         armature = get_current_armature()
         if armature is None or len(armature.pose.bones) == 0:
@@ -110,6 +156,66 @@ class AnimAnimation(Animation):
             for keyframe_point in fcurve.keyframe_points:
                 keyframe_point.interpolation = "LINEAR"
 
+    def build_uv(self):
+
+        fps = AnimAnimation.DEFAULT_FPS
+        scene = bpy.data.scenes[0]
+        if bpy.context.scene is not None:
+            scene = bpy.context.scene
+        scene.render.fps = fps
+
+        for material in bpy.data.materials:
+            if "UV Animations" in material and self.name in material["UV Animations"]:
+                action = bpy.data.actions.new(self.name)
+                node_tree = material.node_tree
+
+                if node_tree.animation_data is None:
+                    node_tree.animation_data_create()
+                node_tree.animation_data.action = action
+
+                uv_links = []
+                uv_transforms = {}
+                for node in node_tree.nodes:
+                    if node.type == "UVMAP" and node.outputs["UV"].is_linked:
+                        uv_transforms[len(uv_transforms)] = [link.to_node for link in node.outputs["UV"].links if link.to_node.type == "MAPPING" and link.to_node.name == self.name]
+                        uv_links.append([[link.from_socket, link.to_socket] for link in node.outputs["UV"].links])
+
+                for keyframe in self.keyframes:
+
+                    uv_channel = self.node_uv_channels[keyframe.node_index]
+
+                    if uv_channel not in uv_transforms or not 0 <= uv_channel <= len(uv_links):
+                        continue
+
+                    frame = scene.frame_start + keyframe.time * fps
+
+                    # Make sure mapping nodes exist
+                    transforms = uv_transforms[uv_channel]
+                    links = uv_links[uv_channel]
+                    for link in links:
+                        if link[1].node not in transforms:
+                            transform = node_tree.nodes.new("ShaderNodeMapping")
+                            transform.name = self.name
+                            transform.label = self.name
+                            transform.vector_type = "TEXTURE"
+                            node_tree.links.new(transform.inputs["Vector"], link[0])
+                            node_tree.links.new(link[1], transform.outputs["Vector"])
+                            transforms.append(transform)
+                            link[1] = transform.inputs["Vector"]
+
+                    for transform in transforms:
+                        transform.inputs["Location"].default_value[0] = keyframe.position[1]
+                        transform.inputs["Location"].default_value[1] = keyframe.position[2]
+                        transform.inputs["Location"].default_value[2] = keyframe.position[0]
+                        transform.inputs["Location"].keyframe_insert(data_path="default_value", frame=frame)
+
+                        transform.inputs["Scale"].default_value[0] = keyframe.scale[1]
+                        transform.inputs["Scale"].default_value[1] = keyframe.scale[2]
+                        transform.inputs["Scale"].default_value[2] = keyframe.scale[0]
+                        transform.inputs["Scale"].keyframe_insert(data_path="default_value", frame=frame)
+
+            # TODO: Make keyframes linear!
+
 
     def fetch(self, root=None):
 
@@ -132,11 +238,14 @@ class AnimAnimation(Animation):
         bones.add(root)
         
         fcurves = armature.animation_data.action.layers[0].strips[0].channelbags[0].fcurves
+        scene = bpy.data.scenes[0]
+        if bpy.context.scene is not None:
+            scene = bpy.context.scene
 
         # Little hack to reconstruct the data path in the fcurves
         base_path = repr(armature) + "."
 
-        keyframes = defaultdict(lambda: defaultdict(lambda: {"location": [0, 0, 0,], "rotation": [1, 0, 0, 0]}))
+        keyframes = defaultdict(lambda: defaultdict(lambda: {"location": [0, 0, 0], "rotation": [1, 0, 0, 0]}))
         for fcurve in fcurves:
             data_path_split = fcurve.data_path.split(".")
             # Never blindly eval!
@@ -149,6 +258,11 @@ class AnimAnimation(Animation):
             if bone_name in bones:
                 for keyframe_point in fcurve.keyframe_points:
                     time, value = keyframe_point.co
+
+                    # Ignore all keyframes outside the current scene time frame
+                    if time < scene.frame_start or time > scene.frame_end:
+                        continue
+
                     if data_path_split[-1] == "rotation_quaternion":
                         keyframes[bone_name][time]["rotation"][fcurve.array_index] = value
                     elif data_path_split[-1] == "location":
@@ -175,13 +289,11 @@ class AnimAnimation(Animation):
             compression_range = {"Min": [0, 0, 0], "Max": [0, 0, 0]}
 
         prev_keyframes = {bone: -1 for bone in bones}
-        scene = bpy.data.scenes[0]
-        if bpy.context.scene is not None:
-            scene = bpy.context.scene
         for keyframe in keyframes:
             bone_name = keyframe[0]
             pose_bone = armature.pose.bones[bone_name]
             rest_bone = pose_bone.bone
+
             time = (keyframe[1] - scene.frame_start)/scene.render.fps
 
             location = Vector(keyframe[2]["location"])

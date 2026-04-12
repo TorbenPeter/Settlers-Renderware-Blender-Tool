@@ -4,6 +4,7 @@ from re import match
 
 from .chunks.clump import Clump
 from .chunks.animanimation import AnimAnimation
+from .chunks.uvanimationdictionary import UVAnimationDictionary
 from .containers.header import Header
 
 from .chunks import Container
@@ -15,20 +16,18 @@ bl_info = {
     "name": "RenderWare importer/exporter for Settlers HoK/RoaE (.dff/.anm/.uva)",
     "author": "fritz_98",
     "version": (0, 1, 0),
-    # "location": "File > Import-Export > Renderware Model (.dff)",
     "description": "RenderWare model and animation importer/exporter for Settlers HoK/RoaE",
     "category": "Import-Export"
 }
 
 # TODO: Allow Import of multiple files at once
-# TODO: Split Animation into a base class and derive AnimAnimation and UVAnimation from that. The ID_STAMP is the same for both
 
 def read_anm_file(context, filepath):
     file = open(filepath, "rb")
     
     header = Header()
     header.read(file)
-    assert (header.chunk_id_stamp == AnimAnimation.ID_STAMP), "Top level Chunk must be of type Anim Animation"
+    assert (header.chunk_id_stamp == AnimAnimation.ID_STAMP), "Top level Chunk must be of type Animation"
 
     anim = AnimAnimation(header)
     anim.read(file)
@@ -42,6 +41,20 @@ def write_anm_file(context, anim, filepath):
     string = anim.write()
     file.write(string)
     file.close()
+
+def read_uva_file(context, filepath):
+    file = open(filepath, "rb")
+    
+    header = Header()
+    header.read(file)
+    assert (header.chunk_id_stamp == UVAnimationDictionary.ID_STAMP), "Top level Chunk must be of type UV Animation Dictionary"
+
+    anim = UVAnimationDictionary(header)
+    anim.read(file)
+
+    file.close()
+
+    return anim
 
 def read_dff_file(context, filepath):
     file = open(filepath, "rb")
@@ -75,19 +88,25 @@ class ImportANM(bpy.types.Operator, ImportHelper):
     filter_glob: bpy.props.StringProperty(default="*.anm;*.uva", options={'HIDDEN'}, maxlen=255)
     
     def execute(self, context):
-        # TODO: Check first whether its a UVA file
-        anim = read_anm_file(context, self.filepath)
-        m = match(r".*_(?P<bone_id>\d+)\.anm", self.filepath)
-        root = None
-        name = ""
-        if m is not None:
-            root = m.group("bone_id")
-            name = root
-        else:
-            m = match(r".*_(?P<anim_name>\w+)\.anm", self.filepath)
+
+        if self.filepath.endswith(".anm"):
+            anim = read_anm_file(context, self.filepath)
+            m = match(r".*_(?P<bone_id>\d+)\.anm", self.filepath)
+            root = None
+            name = ""
             if m is not None:
-                name = m.group("anim_name")
-        anim.build(root=root, name=name)
+                root = m.group("bone_id")
+                name = root
+            else:
+                m = match(r".*_(?P<anim_name>\w+)\.anm", self.filepath)
+                if m is not None:
+                    name = m.group("anim_name")
+            anim.build(root=root, name=name)
+
+        elif self.filepath.endswith(".uva"):
+            anim = read_uva_file(context, self.filepath)
+            anim.build()
+
         return {"FINISHED"}
     
 class ExportANM(bpy.types.Operator, ExportHelper):
