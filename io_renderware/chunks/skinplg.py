@@ -216,8 +216,8 @@ class SkinPLG(Content):
         if self.number_of_used_bones <= SkinPLG.MAX_NUMBER_OF_BONES_PER_GROUP:
             return
 
-        groups = [set()]
         for face_split in face_splits.values():
+            groups = [set()]
             triangles = face_split[0]
 
             # Each vertex in a triangle can be affected by up to 4 bones
@@ -242,13 +242,19 @@ class SkinPLG(Content):
                         else:
                             groups.append(bone_set)
 
-        for face_split in face_splits.values():
+            # Add groups to self.bone_groups
+            self.bone_groups.extend(groups)
+            # Create empty splits
             face_split.extend([[] for _ in range(len(groups) - 1)])
+
+        self.number_of_groups = len(self.bone_groups)
+
+        for face_split in face_splits.values():
             triangles = face_split[0]
             for i in reversed(range(len(triangles))):
                 triangle = triangles[i]
                 triangle_group = set(bone for vertex in triangle for bone, weight in zip(self.vertex_bone_map[vertex], self.vertex_weights[vertex]) if weight > 0.0)
-                for j, group in enumerate(groups):
+                for j, group in enumerate(self.bone_groups):
                     if group.intersection(triangle_group) == triangle_group:
                         face_split[j].append(triangles.pop(i))
                         break
@@ -256,10 +262,6 @@ class SkinPLG(Content):
             for i in reversed(range(len(face_split))):
                 if len(face_split[i]) == 0:
                     face_split.pop(i)
-
-        # Add groups to self.bone_groups
-        self.bone_groups.extend(groups)
-        self.number_of_groups = len(self.bone_groups)
 
         self.bone_remap_indices = []
         remap_index = 0
@@ -272,7 +274,7 @@ class SkinPLG(Content):
 
         # Solve bone remapping with graph coloring
         graph = Graph([bone for bone in range(self.number_of_bones)])
-        for group in groups:
+        for group in self.bone_groups:
             for edge in combinations(group, 2):
                 graph.add_edge(*edge)
 
@@ -281,6 +283,10 @@ class SkinPLG(Content):
         for bone, remap in coloring.items():
             if bone in self.used_bones:
                 self.bone_remap_indices[bone] = remap
+
+        # print(self.bone_groups)
+        # for i, group in enumerate(self.bone_groups):
+        #     print(i, [self.bone_remap_indices[bone] for bone in group])
 
         # RLE for groups and remaps
         for group_index in range(len(self.bone_groups)):
@@ -296,6 +302,7 @@ class SkinPLG(Content):
             self.bone_remaps.extend(remap)
 
         self.number_of_remaps = len(self.bone_remaps)
+
 
     
     def write(self):

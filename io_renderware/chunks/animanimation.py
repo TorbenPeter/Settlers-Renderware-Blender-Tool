@@ -197,7 +197,7 @@ class AnimAnimation(Content):
                             transform = node_tree.nodes.new("ShaderNodeMapping")
                             transform.name = self.name
                             transform.label = self.name
-                            transform.vector_type = "TEXTURE"
+                            transform.vector_type = "POINT"
                             node_tree.links.new(transform.inputs["Vector"], link[0])
                             node_tree.links.new(link[1], transform.outputs["Vector"])
                             transforms.append(transform)
@@ -205,16 +205,20 @@ class AnimAnimation(Content):
 
                     for transform in transforms:
                         transform.inputs["Location"].default_value[0] = keyframe.position[1]
-                        transform.inputs["Location"].default_value[1] = keyframe.position[2]
-                        transform.inputs["Location"].default_value[2] = keyframe.position[0]
+                        transform.inputs["Location"].default_value[1] = -keyframe.position[2]
                         transform.inputs["Location"].keyframe_insert(data_path="default_value", frame=frame)
 
                         transform.inputs["Scale"].default_value[0] = keyframe.scale[1]
                         transform.inputs["Scale"].default_value[1] = keyframe.scale[2]
-                        transform.inputs["Scale"].default_value[2] = keyframe.scale[0]
                         transform.inputs["Scale"].keyframe_insert(data_path="default_value", frame=frame)
 
-            # TODO: Make keyframes linear!
+                        transform.inputs["Rotation"].default_value[1] = keyframe.position[0]
+                        transform.inputs["Rotation"].default_value[2] = keyframe.scale[0]
+                        transform.inputs["Rotation"].keyframe_insert(data_path="default_value", frame=frame)
+
+                for fcurve in action.layers[0].strips[0].channelbags[0].fcurves:
+                    for keyframe_point in fcurve.keyframe_points:
+                        keyframe_point.interpolation = "LINEAR"
 
 
     def fetch(self, root=None):

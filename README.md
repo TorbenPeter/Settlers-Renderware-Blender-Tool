@@ -34,5 +34,4 @@ Blender Addon to edit Renderware Model and Animation Files. Mainly tailored to S
 ## Thanks to
 
 - mcb's Renderware/.json converter, where much of the Renderware file structure is documented: https://github.com/mcb5637/S5Converter
-- The DragonFF project that focuses on GTA titles running on Renderware: https://github.com/Parik27/DragonFF/
 - The GTAmods wiki page that documents the Renderware file structure as well: https://gtamods.com/wiki/RenderWare_binary_stream_file

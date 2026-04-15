@@ -166,6 +166,18 @@ class Geometry(Container):
         for i, face in enumerate(mesh.polygons):
             face.material_index = self.triangles[i].material
 
+        if self.prelit:
+            vertex_colors = mesh.vertex_colors.new()
+            i = 0
+            for polygon in mesh.polygons:
+                for vertex in polygon.vertices:
+                    color = self.prelit_colors[vertex]
+                    vertex_colors.data[i].color[0] = color.r/255
+                    vertex_colors.data[i].color[1] = color.g/255
+                    vertex_colors.data[i].color[2] = color.b/255
+                    vertex_colors.data[i].color[3] = color.a/255
+                    i += 1
+
         # Create Object to attach the mesh to
         object = bpy.data.objects.new("Object{:03}".format(index), mesh)
 
@@ -220,9 +232,9 @@ class Geometry(Container):
         self.number_of_texture_sets = len(mesh.uv_layers)
         self.textured = self.number_of_texture_sets == 1
         self.textured2 = self.number_of_texture_sets > 1
-        self.prelit = False
+        self.prelit = len(mesh.vertex_colors) > 0
         self.has_normals = len(mesh.vertices) > 0
-        self.light = len(mesh.vertices) > 0
+        self.light = len(mesh.vertices) > 0 and not self.prelit
         self.modulate_material_color = False
         self.native = False
 
@@ -310,6 +322,20 @@ class Geometry(Container):
         self.vertex_sets.append(vertices)
         self.normal_sets.append(normals)
 
+        if self.prelit:
+            self.prelit_colors = [RGBA() for _ in range(self.number_of_vertices)]
+            vertex_colors = mesh.vertex_colors[0]
+            i = 0
+            for polygon in mesh.polygons:
+                for vertex in polygon.vertices:
+                    color = self.prelit_colors[vertex]
+                    vertex_color = vertex_colors.data[i].color
+                    color.r = int(vertex_color[0] * 255)
+                    color.g = int(vertex_color[1] * 255)
+                    color.b = int(vertex_color[2] * 255)
+                    color.a = int(vertex_color[3] * 255)
+                    i += 1
+
         if self.number_of_morph_targets <= 1:
             return
         
@@ -362,6 +388,10 @@ class Geometry(Container):
         format |= self.number_of_texture_sets << 16
 
         struct.content += pack("IIII", format, self.number_of_triangles, self.number_of_vertices, self.number_of_morph_targets)
+
+        if self.prelit:
+            for color in self.prelit_colors:
+                struct.content += color.write()
 
         for texture_set in self.texture_sets:
             struct.content += pack("{}f".format(2*len(texture_set)), *[coord for uv in texture_set for coord in uv])
