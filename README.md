@@ -18,6 +18,7 @@ Blender Addon to edit Renderware Model and Animation Files. Mainly tailored to S
 - Only one armature at a time will be exported. If your scene has multiple armatures, select the desired one
 - All objects in the scene will be exported unless they are hidden
 - Accordingly, hidden bones will not be exported. This can be used for IK bones that you don't want to export but keep in the scene
+- Import & Export should be done in Object Mode only
 - Every armature is assigned the custom properties "Local Space" and "Update Locals". Those should be left as they are to keep existing animations compatible. If those properties are not set, "False" is assumed
 - Most imported models will have duplicate vertices. Those are required for proper UV Mapping in Renderware. You can usually remove those doubles as they will be restored on export. Be careful when removing doubles from thin geometries such as cloaks since they might break. Check your model integrity using the material preview
 - All bones must have the following properties: Relative Parenting = False, Connected = False, Local Location = True, Inherit Rotation = True. If that is not the case, exported objects and animations might differ from the Blender view
