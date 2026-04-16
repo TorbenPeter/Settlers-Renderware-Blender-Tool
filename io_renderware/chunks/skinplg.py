@@ -244,12 +244,12 @@ class SkinPLG(Content):
 
             # Add groups to self.bone_groups
             self.bone_groups.extend(groups)
-            # Create empty splits
-            face_split.extend([[] for _ in range(len(groups) - 1)])
 
         self.number_of_groups = len(self.bone_groups)
 
         for face_split in face_splits.values():
+            # Create empty splits
+            face_split.extend([[] for _ in range(len(self.bone_groups) - 1)])
             triangles = face_split[0]
             for i in reversed(range(len(triangles))):
                 triangle = triangles[i]
