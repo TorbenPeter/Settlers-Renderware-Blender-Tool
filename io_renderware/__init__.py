@@ -79,7 +79,7 @@ def write_dff_file(context, clump, filepath):
 
 class ImportANM(bpy.types.Operator, ImportHelper):
     """Import class for Renderware ANM and UVA files (Settlers HoK/RoaE)"""
-    bl_label = "Import RW Animatioon File"
+    bl_label = "Import RW Animation File"
     bl_idname = "import_animation.anm"
     bl_description = "Import class for Renderware ANM and UVA files (Settlers HoK/RoaE)"
 
@@ -111,23 +111,30 @@ class ImportANM(bpy.types.Operator, ImportHelper):
     
 class ExportANM(bpy.types.Operator, ExportHelper):
     """Export class for Renderware ANM files (Settlers HoK/RoaE)"""
-    bl_label = "Export RW ANM File"
+    bl_label = "Export RW Animation File"
     bl_idname = "export_animation.anm"
     bl_description = "Export class for Renderware ANM files (Settlers HoK/RoaE)"
 
     filename_ext = ".anm"
 
-    filter_glob: bpy.props.StringProperty(default="*.anm", options={'HIDDEN'}, maxlen=255)
+    check_extension = None
+
+    filter_glob: bpy.props.StringProperty(default="*.anm;*.uva", options={'HIDDEN'}, maxlen=255)
     
     def execute(self, context):
-        anim = AnimAnimation(Header())
-        m = match(r".*_(?P<bone_id>\d+)\.anm", self.filepath)
-        root = None
-        if m is not None:
-            root = m.group("bone_id")
-        if anim.fetch(root):
-            self.report({'WARNING'}, "FPS should be 30. Export results might differ from 3d view")
-        write_anm_file(context, anim, self.filepath)
+        if self.filepath.endswith(".uva"):
+            uv_anim = UVAnimationDictionary(Header())
+            uv_anim.fetch()
+            write_anm_file(context, uv_anim, self.filepath)
+        else:
+            anim = AnimAnimation(Header())
+            m = match(r".*_(?P<bone_id>\d+)\.anm", self.filepath)
+            root = None
+            if m is not None:
+                root = m.group("bone_id")
+            if anim.fetch(root):
+                self.report({'WARNING'}, "FPS should be 30. Export results might differ from 3d view")
+            write_anm_file(context, anim, self.filepath)
         return {"FINISHED"}
     
     def invoke(self, context, _event):
@@ -138,7 +145,8 @@ class ExportANM(bpy.types.Operator, ExportHelper):
                 # Get armature object - if none is selected, take the first one
                 armature = get_current_armature()
                 if armature is None:
-                    return
+                    context.window_manager.fileselect_add(self)
+                    return {'RUNNING_MODAL'}
                 if armature.animation_data is not None and armature.animation_data.action is not None:
                     blend_filepath = "untitled_" + armature.animation_data.action.name
             else:

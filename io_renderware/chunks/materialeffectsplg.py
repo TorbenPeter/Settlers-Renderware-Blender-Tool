@@ -32,17 +32,19 @@ class MaterialEffectsPLG(Content):
 
         self.type, = unpack("I", file.read(4))
 
-        # NOTE: Currently, only DUAL is supported. Other effects don't occur in the Settlers games which makes them hard to verify
+        # NOTE: Currently, only (UV) DUAL is supported. Other effects don't occur in the Settlers games which makes them hard to verify
         if (self.type == MaterialEffectsPLG.NULL or
             self.type == MaterialEffectsPLG.ENVMAP or
             self.type == MaterialEffectsPLG.BUMPMAP or
             self.type == MaterialEffectsPLG.BUMPENVMAP or
-            self.type == MaterialEffectsPLG.UVTRANSFORM or
-            self.type == MaterialEffectsPLG.DUALUVTRANSFORM):
+            self.type == MaterialEffectsPLG.UVTRANSFORM):
             file.read(self.header.chunk_size - 4)
             return
         
-        if self.type == MaterialEffectsPLG.DUAL:
+        if self.type == MaterialEffectsPLG.DUALUVTRANSFORM:
+            file.read(4)
+        
+        if self.type == MaterialEffectsPLG.DUAL or self.type == MaterialEffectsPLG.DUALUVTRANSFORM:
             _, self.source_blend_mode, self.destination_blend_mode, contains_texture = unpack("i3I", file.read(16))
             contains_texture = bool(contains_texture)
             
@@ -53,9 +55,11 @@ class MaterialEffectsPLG(Content):
             texture_header.read(file)
             texture = Texture(texture_header)
             texture.read(file)
-            # There is a value at the end of the section that has been 0 for all cases so far
-            # Hence, we yeet it for now
+            
+            # There seems to be padding at the end when no second effect is used
             pointer = 4 + 16 + Header.HEADER_SIZE + texture_header.chunk_size
+            if self.type == MaterialEffectsPLG.DUALUVTRANSFORM:
+                pointer += 4
             file.read(self.header.chunk_size - pointer)
             self.textures.append(texture)
 
@@ -65,7 +69,7 @@ class MaterialEffectsPLG(Content):
         if len(self.textures) == 0:
             return
 
-        if self.type == MaterialEffectsPLG.DUAL:
+        if self.type == MaterialEffectsPLG.DUAL or self.type == MaterialEffectsPLG.DUALUVTRANSFORM:
             mixer = node_tree.nodes.new("ShaderNodeMix")
             mixer.data_type = "RGBA"
             mixer.clamp_factor = True
@@ -76,7 +80,7 @@ class MaterialEffectsPLG(Content):
             self.textures[0].build(node_tree, input, mixer.inputs["B"])
 
             # NOTE: There will only be support for a very limited subset of blending options
-            # This is not worth the effort
+            # Again, difficult to verify without examples
             if self.source_blend_mode == 5 and self.destination_blend_mode == 6:
                 # Used for "regular" dual textures
                 node_tree.links.new(mixer.inputs["Factor"], self.textures[0].texture_node.outputs["Alpha"])
@@ -86,12 +90,14 @@ class MaterialEffectsPLG(Content):
                 node_tree.links.new(mixer.inputs["Factor"], self.textures[0].texture_node.outputs["Color"])
 
 
-    def fetch(self, mixer):
+    def fetch(self, mixer, has_uv_animation=False):
 
         if mixer.type != "MIX" or mixer.blend_type != "MIX":
             return
 
         self.type = MaterialEffectsPLG.DUAL
+        if has_uv_animation:
+            self.type = MaterialEffectsPLG.DUALUVTRANSFORM
 
         if not mixer.inputs["Factor"].is_linked:
             return
@@ -112,17 +118,20 @@ class MaterialEffectsPLG(Content):
     def write(self):
         content = b""
 
-        if self.type != MaterialEffectsPLG.DUAL:
+        if self.type != MaterialEffectsPLG.DUAL and self.type != MaterialEffectsPLG.DUALUVTRANSFORM:
             return content
         
         content += pack("I", self.type)
-        content += pack("4I", self.type, self.source_blend_mode, self.destination_blend_mode, int(len(self.textures) > 0))
+        if self.type == MaterialEffectsPLG.DUALUVTRANSFORM:
+            content += pack("I", MaterialEffectsPLG.UVTRANSFORM)
+        content += pack("4I", MaterialEffectsPLG.DUAL, self.source_blend_mode, self.destination_blend_mode, int(len(self.textures) > 0))
         
         for texture in self.textures:
             content += texture.write()
 
-        # In the original files there are always 4 bytes of 0 appended
-        content += pack("i", 0)
+        # Padding for second effect
+        if self.type == MaterialEffectsPLG.DUAL:
+            content += pack("i", 0)
 
         self.header.chunk_size = len(content)
         return self.header.write() + content

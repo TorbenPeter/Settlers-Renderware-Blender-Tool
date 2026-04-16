@@ -168,7 +168,7 @@ class Material(Container):
             # Dual Texture
             elif mix_node.inputs["B"].is_linked and mix_node.blend_type == "MIX":
                 material_effects = MaterialEffectsPLG(Header())
-                material_effects.fetch(mix_node)
+                material_effects.fetch(mix_node, "UV Animations" in material)
                 extension.children[MaterialEffectsPLG.ID_STAMP] = [material_effects]
 
         elif properties["Base Color"].links[0].from_node.type == "TEX_IMAGE":

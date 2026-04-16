@@ -2,7 +2,7 @@ from .content import Content
 from .framelist import FrameList
 from ..containers.keyframe import Keyframe
 from ..containers.uvkeyframe import UVKeyframe
-from ..util import get_current_armature
+from ..util import get_current_armature, display
 import bpy
 from mathutils import Quaternion, Matrix, Vector
 from collections import defaultdict
@@ -85,7 +85,7 @@ class AnimAnimation(Content):
 
         node_counter = 0
         for keyframe in self.keyframes:
-            prev_keyframe = keyframe.prev_keyframe_index
+            prev_keyframe = keyframe.keyframe_index
             if 0 <= prev_keyframe < len(self.keyframes):
                 node_index = self.keyframes[prev_keyframe].node_index
             else:
@@ -173,18 +173,18 @@ class AnimAnimation(Content):
                     node_tree.animation_data_create()
                 node_tree.animation_data.action = action
 
-                uv_links = []
+                uv_links = {}
                 uv_transforms = {}
                 for node in node_tree.nodes:
                     if node.type == "UVMAP" and node.outputs["UV"].is_linked:
-                        uv_transforms[len(uv_transforms)] = [link.to_node for link in node.outputs["UV"].links if link.to_node.type == "MAPPING" and link.to_node.name == self.name]
-                        uv_links.append([[link.from_socket, link.to_socket] for link in node.outputs["UV"].links])
+                        uv_transforms[len(uv_transforms)] = [link.to_node for link in node.outputs["UV"].links if link.to_node.type == "MAPPING"]
+                        uv_links[len(uv_links)] = [[link.from_socket, link.to_socket] for link in node.outputs["UV"].links]
 
                 for keyframe in self.keyframes:
 
                     uv_channel = self.node_uv_channels[keyframe.node_index]
 
-                    if uv_channel not in uv_transforms or not 0 <= uv_channel <= len(uv_links):
+                    if uv_channel not in uv_transforms or uv_channel not in uv_links:
                         continue
 
                     frame = scene.frame_start + keyframe.time * fps
@@ -259,18 +259,20 @@ class AnimAnimation(Content):
             except:
                 continue
             bone_name = bone.name
-            if bone_name in bones:
-                for keyframe_point in fcurve.keyframe_points:
-                    time, value = keyframe_point.co
+            if bone_name not in bones:
+                continue
 
-                    # Ignore all keyframes outside the current scene time frame
-                    if time < scene.frame_start or time > scene.frame_end:
-                        continue
+            for keyframe_point in fcurve.keyframe_points:
+                time, value = keyframe_point.co
 
-                    if data_path_split[-1] == "rotation_quaternion":
-                        keyframes[bone_name][time]["rotation"][fcurve.array_index] = value
-                    elif data_path_split[-1] == "location":
-                        keyframes[bone_name][time]["location"][fcurve.array_index] = value
+                # Ignore all keyframes outside the current scene time frame
+                if time < scene.frame_start or time > scene.frame_end:
+                    continue
+
+                if data_path_split[-1] == "rotation_quaternion":
+                    keyframes[bone_name][time]["rotation"][fcurve.array_index] = value
+                elif data_path_split[-1] == "location":
+                    keyframes[bone_name][time]["location"][fcurve.array_index] = value
 
         # Bring keyframes in the correct order:
         # 1. Sort by time (bone order irrelevant)
@@ -340,10 +342,84 @@ class AnimAnimation(Content):
             return True
         else:
             return False
+        
+    def fetch_uv(self, material, name):
+        self.name = name
+        self.node_uv_channels = [0]*8
+        self.type = AnimAnimation.TYPE_PARAM
+
+        node_tree = material.node_tree
+        if node_tree.animation_data is None or node_tree.animation_data.action is None:
+            return
+
+        fcurves = node_tree.animation_data.action.layers[0].strips[0].channelbags[0].fcurves
+        scene = bpy.data.scenes[0]
+        if bpy.context.scene is not None:
+            scene = bpy.context.scene
+
+        uv_links = [node.outputs["UV"].links[0].to_node for node in node_tree.nodes if node.type == "UVMAP" and node.outputs["UV"].is_linked]
+        for i in range(len(uv_links)):
+            self.node_uv_channels[i] = i
+
+        base_path = repr(node_tree) + "."
+        keyframes = defaultdict(lambda: defaultdict(lambda: {"Location": [0, 0, 0], "Rotation": [0, 0, 0], "Scale": [1, 1, 1]}))
+        for fcurve in fcurves:
+            data_path_split = fcurve.data_path.split(".")
+            try:
+                input = eval(base_path + ".".join(data_path_split[:-1]))
+                node = input.node
+            except:
+                continue
+            if node.type != "MAPPING":
+                continue
+            if node not in uv_links:
+                continue
+
+            for keyframe_point in fcurve.keyframe_points:
+                time, value = keyframe_point.co
+
+                if time < scene.frame_start or time > scene.frame_end:
+                    continue
+
+                keyframes[node][time][input.name][fcurve.array_index] = value
+
+        keyframe_previous_time = {uv_links.index(node): -1 for node in keyframes.keys()}
+        keyframe_index = {uv_links.index(node): -1 for node in keyframes.keys()}
+        keyframes = [[uv_links.index(node), time, keyframe] for node, frame in keyframes.items() for time, keyframe in frame.items()]
+        keyframes.sort(key = lambda x: x[1])
+
+        for keyframe in keyframes:
+            keyframe.append(keyframe_previous_time[keyframe[0]])
+            keyframe_previous_time[keyframe[0]] = keyframe[1]
+
+        keyframes.sort(key = lambda x: (x[3], x[0], x[1]))
+        
+        for keyframe in keyframes:
+            node = keyframe[0]
+            time = (keyframe[1] - scene.frame_start)/scene.render.fps
+            keys = keyframe[2]
+            scale = Vector((0, 1, 1))
+            position = Vector((0, 0, 0))
+
+            scale[0] = keys["Rotation"][2]
+            scale[1] = keys["Scale"][0]
+            scale[2] = keys["Scale"][1]
+
+            position[0] = keys["Rotation"][1]
+            position[1] = keys["Location"][0]
+            position[2] = -keys["Location"][1]
+
+            self.keyframes.append(UVKeyframe(False, node, time, scale, position, keyframe_index[node]))
+            keyframe_index[node] = len(self.keyframes) - 1
+
+        self.duration = (scene.frame_end - scene.frame_start)/scene.render.fps
+        self.number_of_frames = len(self.keyframes)
+
+        if scene.render.fps != AnimAnimation.DEFAULT_FPS:
+            bpy.context.window_manager.popup_menu(display("FPS should be 30. Export results might differ from 3d view"), title="Warning", icon='ERROR')
 
 
     def write(self):
-
         content = b""
         for keyframe in self.keyframes:
             if self.type == AnimAnimation.TYPE_COMPRESSED:
@@ -356,5 +432,19 @@ class AnimAnimation(Content):
         header = pack("IIIIf", 256, self.type, self.number_of_frames, 0, self.duration)
         content = header + content
         
+        self.header.chunk_size = len(content)
+        return self.header.write() + content
+    
+    def write_uv(self):
+        content = b""
+        content += pack("IIIIfI", 256, self.type, self.number_of_frames, 0, self.duration, 0)
+
+        name = self.name + "\0"*(32 - len(self.name))
+        content += name.encode("utf-8")
+        content += pack("8I", *self.node_uv_channels)
+
+        for keyframe in self.keyframes:
+            content += keyframe.write()
+
         self.header.chunk_size = len(content)
         return self.header.write() + content
