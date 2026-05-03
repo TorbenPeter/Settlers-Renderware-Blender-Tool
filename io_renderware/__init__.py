@@ -218,8 +218,8 @@ class ImportDFFPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
     texture_path: bpy.props.StringProperty(
-        # default = "",
-        default = "C:\\Spiele\\theSettlers5\\base\\shr\\graphics\\Textures\\",
+        default = "",
+        # default = "C:\\Spiele\\theSettlers5\\base\\shr\\graphics\\Textures\\",
         name = "Texture file path",
         description = "Path to Texures for imported models",
         subtype = 'FILE_PATH'

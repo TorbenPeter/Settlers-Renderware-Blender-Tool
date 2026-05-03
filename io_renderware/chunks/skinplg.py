@@ -207,8 +207,6 @@ class SkinPLG(Content):
             bone_list.extend([0]*(4-len(bone_list)))
         for weight_list in self.vertex_weights:
             weight_list.extend([0.0]*(4-len(weight_list)))
-            if sum(weight_list) > 1:
-                print(sum(weight_list), weight_list)
 
         apply_vertex_remap(self.vertex_bone_map, vertex_remap, number_of_vertices)
         apply_vertex_remap(self.vertex_weights, vertex_remap, number_of_vertices)

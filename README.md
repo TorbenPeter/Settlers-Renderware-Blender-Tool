@@ -31,7 +31,7 @@ Blender Addon to edit Renderware Model and Animation Files. Mainly tailored to S
 - Units from RoaE are often blue upon import. This is due to the masks that Blue Byte uses for specular effects as well as player colors. You can edit the shader node tree to temporarily disable them, however, they must be reenabled for a valid export
 - For all animations, only the keyframes inside the current frame window are exported
 - For UV animations, the name of the animation must be attached to the respective object as a custom property
-- Make sure that before exported a skinned model that all vertex groups are normalized and any 0-weight vertex is removed from the group
+- Make sure that before exporting a skinned model that all vertex groups are normalized and any 0-weight vertex is removed from the group
 - Unit animations usually consist of numerous keyframes. Those are most likely baked and not created by hand. Try to find actual key points and delete the rest for easier editing
 
 ## Thanks to
