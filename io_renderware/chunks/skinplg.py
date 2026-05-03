@@ -90,7 +90,6 @@ class SkinPLG(Content):
                     bone = armature.pose.bones[bone_index]
                     object.vertex_groups[bone.name].add((vertex_id,), weight, 'ADD')
 
-
     def fetch(self, object, vertex_remap, face_splits, number_of_vertices):
 
         # In order to create a valid bone remapping, we compute a graph coloring on all used bones with
@@ -186,22 +185,30 @@ class SkinPLG(Content):
         for vertex in object.data.vertices:
             for group in vertex.groups:
 
+                if group.weight <= 0:
+                    continue
+
                 bone_name = object.vertex_groups[group.group].name
                 if bone_name in armature.pose.bones and not armature.pose.bones[bone_name].hide:
                     bone_id = armature.pose.bones.find(bone_name)
                     self.vertex_bone_map[vertex.index].append(bone_id)
                     self.vertex_weights[vertex.index].append(group.weight)
-                    self.max_number_of_vertex_weights = max(self.max_number_of_vertex_weights, len(self.vertex_bone_map[vertex.index]))
 
                     if bone_id not in self.used_bones:
                         self.used_bones.append(bone_id)
 
+        self.max_number_of_vertex_weights = max(len(map) for map in self.vertex_bone_map)
         self.number_of_used_bones = len(self.used_bones)
+
+        if self.max_number_of_vertex_weights > 4:
+            Exception("The maximum number of bones that affect a single vertex cannot exceed 4")
 
         for bone_list in self.vertex_bone_map:
             bone_list.extend([0]*(4-len(bone_list)))
         for weight_list in self.vertex_weights:
-            weight_list.extend([0]*(4-len(weight_list)))
+            weight_list.extend([0.0]*(4-len(weight_list)))
+            if sum(weight_list) > 1:
+                print(sum(weight_list), weight_list)
 
         apply_vertex_remap(self.vertex_bone_map, vertex_remap, number_of_vertices)
         apply_vertex_remap(self.vertex_weights, vertex_remap, number_of_vertices)

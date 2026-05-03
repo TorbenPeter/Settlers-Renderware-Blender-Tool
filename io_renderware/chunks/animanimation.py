@@ -300,7 +300,9 @@ class AnimAnimation(Content):
             pose_bone = armature.pose.bones[bone_name]
             rest_bone = pose_bone.bone
 
-            time = (keyframe[1] - scene.frame_start)/scene.render.fps
+            time = (keyframe[1] - scene.frame_start)
+            if time > 0:
+                time = (time + 1e-6)/scene.render.fps
 
             location = Vector(keyframe[2]["location"])
             rotation = Quaternion(keyframe[2]["rotation"]).to_matrix().to_4x4()
@@ -328,7 +330,7 @@ class AnimAnimation(Content):
                     if current_value > current_max:
                         compression_range["Max"][index] = current_value
 
-        self.duration = (scene.frame_end - scene.frame_start)/scene.render.fps
+        self.duration = (scene.frame_end - scene.frame_start + 1e-6)/scene.render.fps
 
         if self.type == AnimAnimation.TYPE_COMPRESSED:
             base = (Vector(compression_range["Min"]) + Vector(compression_range["Max"])) / 2

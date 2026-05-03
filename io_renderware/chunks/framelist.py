@@ -6,7 +6,7 @@ from .userdataplg import UserDataPLG
 from ..containers.header import Header
 from ..containers.frame import Frame
 from ..containers.bone import Bone
-from ..util import get_current_armature
+from ..util import get_current_armature, display
 from struct import pack, unpack
 import bpy
 from mathutils import Vector, Matrix
@@ -190,20 +190,14 @@ class FrameList(Container):
         
         permutation = FrameList.LOCAL_MATRIX[self.local_space]
         bone_list = [root] + [child for child in root.children_recursive if not child.hide]
-        bone_names = {bone.name for bone in bone_list if bone.name.isdigit()}
         for bone in bone_list:
             frame = Frame()
 
             bone_name = bone.name
 
-            # Rename all bones that don't have a qualifying name
+            # Give a warning for all bones that don't have a qualifying name
             if not bone_name.isdigit():
-                while True:
-                    bone_name = str(randint(1000, 2999))
-                    if bone_name not in bone_names:
-                        break
-                bone.name = bone_name
-                bone_names.add(bone_name)
+                bpy.context.window_manager.popup_menu(display("Bone name {} is invalid".format(bone_name)), title="Warning", icon='ERROR')
 
             frame.bone = Bone(int(bone_name))
             frame.bone.matrix = bone.bone.matrix_local @ permutation.inverted()

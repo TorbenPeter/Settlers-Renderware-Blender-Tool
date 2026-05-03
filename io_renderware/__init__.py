@@ -15,7 +15,7 @@ from .util import get_current_armature
 bl_info = {
     "name": "RenderWare importer/exporter for Settlers HoK/RoaE (.dff/.anm/.uva)",
     "author": "fritz_98",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "description": "RenderWare model and animation importer/exporter for Settlers HoK/RoaE",
     "category": "Import-Export"
 }
@@ -218,8 +218,8 @@ class ImportDFFPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
     texture_path: bpy.props.StringProperty(
-        default = "",
-        # default = "C:\\Spiele\\theSettlers5\\base\\shr\\graphics\\Textures\\",
+        # default = "",
+        default = "C:\\Spiele\\theSettlers5\\base\\shr\\graphics\\Textures\\",
         name = "Texture file path",
         description = "Path to Texures for imported models",
         subtype = 'FILE_PATH'

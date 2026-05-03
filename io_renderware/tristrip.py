@@ -122,8 +122,6 @@ class TriangulationDualGraph:
         for node in nodes:
             node.classify()
             self.nodes[node.group].add(node)
-
-        self.orig_nodes = nodes
     
     def insert_node(self, node: Node) -> None:
         self.nodes[node.group].add(node)
